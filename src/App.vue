@@ -180,6 +180,14 @@
     
     <!-- 主要内容区域 -->
     <main class="main-content">
+      <!-- 倒计时覆盖层 -->
+      <div v-if="isCountingDown" class="countdown-overlay">
+        <div class="countdown-content">
+          <div class="countdown-number">{{ countdownNumber }}</div>
+          <div class="countdown-text">录制即将开始...</div>
+        </div>
+      </div>
+      
       <!-- 左侧编辑器 -->
       <div class="editor-panel">
         <div class="panel-header">
@@ -320,6 +328,8 @@ export default {
     const recordedVideoUrl = ref('')
     const mediaRecorder = ref(null)
     const recordedChunks = ref([])
+    const isCountingDown = ref(false)
+    const countdownNumber = ref(3)
     const initialCode = ref('')
     const code = ref('')
 
@@ -981,15 +991,35 @@ export default {
         // 隐藏界面元素
         hideUIForRecording()
         
-        mediaRecorder.value.start(1000) // 每秒收集一次数据
-        isRecording.value = true
+        // 开始3秒倒计时
+        isCountingDown.value = true
+        countdownNumber.value = 3
         
-        // 延迟开始自动化输出，给用户时间准备
-        setTimeout(() => {
-          if (isRecording.value) {
-            autoTypeOutput()
+        // 倒计时逻辑
+        const countdown = () => {
+          if (countdownNumber.value > 0) {
+            setTimeout(() => {
+              countdownNumber.value--
+              if (countdownNumber.value > 0) {
+                countdown()
+              } else {
+                // 倒计时结束，开始实际录制
+                isCountingDown.value = false
+                mediaRecorder.value.start(1000) // 每秒收集一次数据
+                isRecording.value = true
+                
+                // 延迟开始自动化输出，给用户时间准备
+                setTimeout(() => {
+                  if (isRecording.value) {
+                    autoTypeOutput()
+                  }
+                }, 1000) // 录制开始后1秒开始自动输出
+              }
+            }, 1000)
           }
-        }, 3000) // 增加到3秒延迟
+        }
+        
+        countdown()
         
       } catch (error) {
         console.error('录制启动失败:', error)
@@ -1200,7 +1230,7 @@ export default {
 
     // ESC键取消录制功能
     const handleEscapeKey = (event) => {
-      if (event.key === 'Escape' && isRecording.value) {
+      if (event.key === 'Escape' && (isRecording.value || isCountingDown.value)) {
         event.preventDefault()
         const confirmCancel = confirm(
           '是否要取消当前录制？\n\n' +
@@ -1209,6 +1239,9 @@ export default {
         )
         
         if (confirmCancel) {
+          // 停止倒计时
+          isCountingDown.value = false
+          
           // 停止自动输出
           isAutoTyping.value = false
           
@@ -1224,8 +1257,13 @@ export default {
             })
           }
           
-          // 停止录制
-          stopRecording()
+          // 停止录制（如果已经开始录制）
+          if (isRecording.value) {
+            stopRecording()
+          } else {
+            // 如果只是在倒计时阶段，恢复界面
+            restoreUIAfterRecording()
+          }
         }
       }
     }
@@ -1270,6 +1308,8 @@ export default {
       isRecording,
       showVideoModal,
       recordedVideoUrl,
+      isCountingDown,
+      countdownNumber,
       changeLanguage,
       runCode,
       formatCode,
@@ -1582,6 +1622,57 @@ export default {
   height: 100%;
   width: 100%;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* 倒计时覆盖层样式 */
+.countdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(5px);
+}
+
+.countdown-content {
+  text-align: center;
+  color: #ffffff;
+}
+
+.countdown-number {
+  font-size: 120px;
+  font-weight: 700;
+  color: #007acc;
+  text-shadow: 0 0 30px rgba(0, 122, 204, 0.5);
+  animation: countdownPulse 1s ease-in-out infinite;
+  margin-bottom: 20px;
+}
+
+.countdown-text {
+  font-size: 24px;
+  font-weight: 500;
+  color: #ffffff;
+  opacity: 0.9;
+}
+
+@keyframes countdownPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* 按钮样式 */
