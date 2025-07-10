@@ -218,6 +218,24 @@
               >
             </div>
           </div>
+          <div class="settings-row" v-if="watermarkEnabled">
+            <div class="setting-item">
+              <label for="watermarkOpacity">透明度:</label>
+              <select 
+                id="watermarkOpacity" 
+                v-model="watermarkOpacity"
+                @change="updateWatermarkStyle"
+                class="select-compact"
+              >
+                <option value="0.05">很淡</option>
+                <option value="0.1">较淡</option>
+                <option value="0.15">适中</option>
+                <option value="0.2">较浓</option>
+                <option value="0.3">很浓</option>
+                <option value="0.5">极浓</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -382,6 +400,7 @@ export default {
     // 水印相关配置
     const watermarkEnabled = ref(true)
     const watermarkText = ref('AUVWEB')
+    const watermarkOpacity = ref('0.15')
 
     // 计算水印位置
     const watermarkPositions = computed(() => {

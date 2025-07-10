@@ -179,6 +179,7 @@
   user-select: none;
   pointer-events: none;
   white-space: nowrap;
+  opacity: var(--watermark-opacity, 0.15);
 }
 
 .settings-content {
