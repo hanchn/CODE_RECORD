@@ -320,6 +320,7 @@ export default {
     const recordedVideoUrl = ref('')
     const mediaRecorder = ref(null)
     const recordedChunks = ref([])
+    const initialCode = ref('')
 
     // 语言映射
     const languageMap = {
@@ -894,6 +895,12 @@ export default {
           // 录制完成后恢复界面显示
           restoreUIAfterRecording()
           
+          // 恢复代码到初始状态
+          if (initialCode.value && editor.value) {
+            code.value = initialCode.value
+            editor.value.setValue(initialCode.value)
+          }
+          
           // 自动弹出预览窗口
           showVideoModal.value = true
           isRecording.value = false
@@ -906,6 +913,9 @@ export default {
           }
         }
 
+        // 保存初始代码状态
+        initialCode.value = code.value
+        
         // 开始录制前隐藏界面元素
         hideUIForRecording()
         
@@ -941,6 +951,18 @@ export default {
         mediaRecorder.value.stream.getTracks().forEach(track => {
           track.stop()
         })
+      }
+      
+      // 立即恢复界面（如果录制被手动停止）
+      if (isRecording.value) {
+        isRecording.value = false
+        restoreUIAfterRecording()
+        
+        // 恢复代码到初始状态
+        if (initialCode.value && editor.value) {
+          code.value = initialCode.value
+          editor.value.setValue(initialCode.value)
+        }
       }
     }
 
@@ -1752,6 +1774,22 @@ select:focus {
   background: #6c757d;
   border-color: #6c757d;
   color: #fff;
+}
+
+.btn-danger {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+  border-color: #bd2130;
+}
+
+.btn-danger:active {
+  background: #bd2130;
+  border-color: #b21f2d;
 }
 
 .modal-footer {
