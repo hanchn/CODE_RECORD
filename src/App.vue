@@ -934,6 +934,38 @@ export default {
           }
         })
         
+        // 绘制水印（如果启用）
+        if (watermarkEnabled.value && watermarkText.value.trim()) {
+          ctx.save()
+          
+          // 设置水印样式
+          const watermarkFontSize = 24
+          ctx.font = `${watermarkFontSize}px Arial, sans-serif`
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          
+          // 计算水印位置和旋转角度
+          const watermarkSpacing = 150 // 水印间距
+          const rotationAngle = -Math.PI / 6 // -30度角
+          
+          // 旋转画布
+          ctx.rotate(rotationAngle)
+          
+          // 计算旋转后的画布尺寸
+          const rotatedWidth = baseWidth * Math.cos(Math.abs(rotationAngle)) + baseHeight * Math.sin(Math.abs(rotationAngle))
+          const rotatedHeight = baseWidth * Math.sin(Math.abs(rotationAngle)) + baseHeight * Math.cos(Math.abs(rotationAngle))
+          
+          // 绘制多个水印，形成网格效果
+          for (let x = -rotatedWidth; x < rotatedWidth * 2; x += watermarkSpacing) {
+            for (let y = -rotatedHeight; y < rotatedHeight * 2; y += watermarkSpacing) {
+              ctx.fillText(watermarkText.value, x, y)
+            }
+          }
+          
+          ctx.restore()
+        }
+        
         // 转换为高质量图片URL
         generatedImageUrl.value = canvas.toDataURL('image/png', 1.0)
         showImageModal.value = true
