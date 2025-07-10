@@ -939,14 +939,14 @@ export default {
           ctx.save()
           
           // 设置水印样式
-          const watermarkFontSize = 24
+          const watermarkFontSize = 36
           ctx.font = `${watermarkFontSize}px Arial, sans-serif`
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'
           ctx.textAlign = 'center'
           ctx.textBaseline = 'middle'
           
           // 计算水印位置和旋转角度
-          const watermarkSpacing = 150 // 水印间距
+          const watermarkSpacing = 250 // 水印间距
           const rotationAngle = -Math.PI / 6 // -30度角
           
           // 旋转画布
@@ -1005,6 +1005,70 @@ export default {
       }
     }
 
+    // 创建带水印的Canvas流
+    const createWatermarkedStream = (originalStream) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const video = document.createElement('video')
+      
+      // 设置canvas尺寸
+      canvas.width = 1920
+      canvas.height = 1080
+      
+      video.srcObject = originalStream
+      video.play()
+      
+      // 绘制水印的函数
+        const drawWatermark = () => {
+          if (!watermarkEnabled.value || !watermarkText.value) return
+          
+          ctx.save()
+          ctx.globalAlpha = 0.15
+          ctx.fillStyle = 'white'
+          ctx.font = '72px Arial'
+          ctx.textAlign = 'center'
+          
+          // 旋转-30度
+          const angle = -30 * Math.PI / 180
+          
+          // 在整个canvas上绘制重复的水印，增大间距
+          const spacing = 500
+          for (let x = -300; x < canvas.width + 300; x += spacing) {
+            for (let y = -300; y < canvas.height + 300; y += spacing) {
+              ctx.save()
+              ctx.translate(x, y)
+              ctx.rotate(angle)
+              ctx.fillText(watermarkText.value, 0, 0)
+              ctx.restore()
+            }
+          }
+          
+          ctx.restore()
+        }
+      
+      // 渲染循环
+      const render = () => {
+        if (video.readyState >= 2) {
+          // 绘制原始视频
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          
+          // 绘制水印
+          drawWatermark()
+        }
+        
+        if (isRecording.value) {
+          requestAnimationFrame(render)
+        }
+      }
+      
+      video.addEventListener('loadedmetadata', () => {
+        render()
+      })
+      
+      // 返回canvas流
+      return canvas.captureStream(30)
+    }
+
     // 开始录制
     const startRecording = async () => {
       try {
@@ -1030,7 +1094,7 @@ export default {
         }
         
         // 请求屏幕录制权限，提供更多选项
-        const stream = await navigator.mediaDevices.getDisplayMedia({
+        const originalStream = await navigator.mediaDevices.getDisplayMedia({
           video: {
             mediaSource: 'screen', // 允许用户选择屏幕、窗口或标签页
             width: { ideal: 1920, max: 1920 },
@@ -1043,6 +1107,24 @@ export default {
             sampleRate: 44100
           }
         })
+        
+        // 创建带水印的视频流
+        const watermarkedVideoStream = createWatermarkedStream(originalStream)
+        
+        // 合并音频和带水印的视频流
+        const combinedStream = new MediaStream()
+        
+        // 添加带水印的视频轨道
+        watermarkedVideoStream.getVideoTracks().forEach(track => {
+          combinedStream.addTrack(track)
+        })
+        
+        // 添加原始音频轨道
+        originalStream.getAudioTracks().forEach(track => {
+          combinedStream.addTrack(track)
+        })
+        
+        const stream = combinedStream
         
         // 动态检测支持的MIME类型
         const getSupportedMimeType = () => {
@@ -1101,16 +1183,24 @@ export default {
           showVideoModal.value = true
           isRecording.value = false
           
-          // 停止所有轨道
+          // 停止合成流的所有轨道
           stream.getTracks().forEach(track => track.stop())
+          
+          // 停止原始屏幕录制流
+          if (mediaRecorder.value.originalStream) {
+            mediaRecorder.value.originalStream.getTracks().forEach(track => track.stop())
+          }
         }
         
         // 监听用户手动停止屏幕共享
-        stream.getVideoTracks()[0].addEventListener('ended', () => {
+        originalStream.getVideoTracks()[0].addEventListener('ended', () => {
           if (isRecording.value) {
             stopRecording()
           }
         })
+        
+        // 保存原始流的引用，用于后续清理
+        mediaRecorder.value.originalStream = originalStream
         
         // 保存当前代码状态
         if (editor.value) {
@@ -1171,11 +1261,18 @@ export default {
     const stopRecording = () => {
       if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
         mediaRecorder.value.stop()
-        
-        // 停止所有视频轨道
+a        
+        // 停止合成流的所有轨道
         mediaRecorder.value.stream.getTracks().forEach(track => {
           track.stop()
         })
+        
+        // 停止原始屏幕录制流
+        if (mediaRecorder.value.originalStream) {
+          mediaRecorder.value.originalStream.getTracks().forEach(track => {
+            track.stop()
+          })
+        }
       }
       
       // 立即恢复界面（如果录制被手动停止）
@@ -1439,6 +1536,8 @@ export default {
       recordedVideoUrl,
       isCountingDown,
       countdownNumber,
+      watermarkEnabled,
+      watermarkText,
       changeLanguage,
       runCode,
       formatCode,

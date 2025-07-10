@@ -130,6 +130,33 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
 }
 
+/* 水印设置样式 */
+.watermark-checkbox {
+  margin-right: 8px;
+  accent-color: #0078d4;
+}
+
+.watermark-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 3px;
+  color: #cccccc;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.watermark-input:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 1px #0078d4;
+}
+
+.watermark-input::placeholder {
+  color: #858585;
+}
+
 .settings-content {
   max-width: 1200px;
   margin: 0 auto;
