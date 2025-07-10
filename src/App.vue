@@ -175,6 +175,35 @@
             </div>
           </div>
         </div>
+        
+        <div class="settings-group">
+          <h4>🏷️ 水印设置</h4>
+          <div class="settings-row">
+            <div class="setting-item">
+              <label>
+                <input 
+                  type="checkbox" 
+                  v-model="watermarkEnabled"
+                  class="watermark-checkbox"
+                >
+                启用水印
+              </label>
+            </div>
+          </div>
+          <div class="settings-row" v-if="watermarkEnabled">
+            <div class="setting-item">
+              <label for="watermarkText">水印文本:</label>
+              <input 
+                id="watermarkText" 
+                type="text" 
+                v-model="watermarkText"
+                class="watermark-input"
+                placeholder="请输入水印文本"
+                maxlength="20"
+              >
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -332,6 +361,10 @@ export default {
     const countdownNumber = ref(3)
     const initialCode = ref('')
     const code = ref('')
+    
+    // 水印相关配置
+    const watermarkEnabled = ref(true)
+    const watermarkText = ref('AUVWEB')
 
     // 语言映射
     const languageMap = {
@@ -815,12 +848,16 @@ export default {
         ctx.font = `${fontSize / dpr}px 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace`
         ctx.textBaseline = 'middle'
         
+        // 获取编辑器中的高亮样式
+        const editorElement = editorRef.value.querySelector('.cm-editor')
+        const cmLines = editorElement.querySelectorAll('.cm-line')
+        
         // 绘制行号和代码
         lines.forEach((line, index) => {
           const y = (lineHeight / dpr / 2) + index * (lineHeight / dpr)
           
           // 绘制行号背景
-          ctx.fillStyle = '#2d2d2d'
+          ctx.fillStyle = '#1e1e1e'
           ctx.fillRect(0, y - (lineHeight / dpr / 2), lineNumberWidth / dpr, lineHeight / dpr)
           
           // 绘制行号
@@ -829,13 +866,72 @@ export default {
           ctx.fillText((index + 1).toString(), (lineNumberWidth / dpr) - 15, y)
           
           // 绘制分隔线
-          ctx.fillStyle = '#444444'
+          ctx.fillStyle = '#2d2d30'
           ctx.fillRect(lineNumberWidth / dpr, y - (lineHeight / dpr / 2), 1, lineHeight / dpr)
           
-          // 绘制代码
-          ctx.fillStyle = '#d4d4d4'
+          // 绘制代码（带语法高亮）
           ctx.textAlign = 'left'
-          ctx.fillText(line, (lineNumberWidth / dpr) + 15, y)
+          let x = (lineNumberWidth / dpr) + 15
+          
+          if (cmLines[index]) {
+            // 获取该行的所有语法高亮元素
+            const tokens = cmLines[index].querySelectorAll('*')
+            let currentText = ''
+            let currentColor = '#d4d4d4' // 默认文本颜色
+            
+            // 如果没有语法高亮元素，直接绘制纯文本
+            if (tokens.length === 0) {
+              ctx.fillStyle = '#d4d4d4'
+              ctx.fillText(line, x, y)
+            } else {
+              // 遍历所有token并应用相应颜色
+              const processNode = (node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                  if (node.textContent.trim()) {
+                    ctx.fillStyle = currentColor
+                    ctx.fillText(node.textContent, x, y)
+                    x += ctx.measureText(node.textContent).width
+                  }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                  // 根据CSS类名设置颜色
+                  const className = node.className
+                  if (className.includes('tok-keyword')) {
+                    currentColor = '#569cd6' // 关键字 - 蓝色
+                  } else if (className.includes('tok-string')) {
+                    currentColor = '#ce9178' // 字符串 - 橙色
+                  } else if (className.includes('tok-comment')) {
+                    currentColor = '#6a9955' // 注释 - 绿色
+                  } else if (className.includes('tok-number')) {
+                    currentColor = '#b5cea8' // 数字 - 浅绿色
+                  } else if (className.includes('tok-operator')) {
+                    currentColor = '#d4d4d4' // 操作符 - 白色
+                  } else if (className.includes('tok-variableName')) {
+                    currentColor = '#9cdcfe' // 变量名 - 浅蓝色
+                  } else if (className.includes('tok-typeName')) {
+                    currentColor = '#4ec9b0' // 类型名 - 青色
+                  } else if (className.includes('tok-function')) {
+                    currentColor = '#dcdcaa' // 函数名 - 黄色
+                  } else {
+                    currentColor = '#d4d4d4' // 默认颜色
+                  }
+                  
+                  // 递归处理子节点
+                  for (let child of node.childNodes) {
+                    processNode(child)
+                  }
+                }
+              }
+              
+              // 处理整行
+              for (let child of cmLines[index].childNodes) {
+                processNode(child)
+              }
+            }
+          } else {
+            // 如果没有对应的编辑器行，使用默认颜色
+            ctx.fillStyle = '#d4d4d4'
+            ctx.fillText(line, x, y)
+          }
         })
         
         // 转换为高质量图片URL
