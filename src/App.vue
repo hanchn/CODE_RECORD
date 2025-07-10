@@ -22,6 +22,9 @@
           >
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="go">Go</option>
+            <option value="shell">Shell/Bash</option>
             <option value="html">HTML</option>
             <option value="css">CSS</option>
           </select>
@@ -29,56 +32,34 @@
       </div>
       
       <div class="toolbar-right">
-        <div class="status-info">
-          <div 
-            class="status-indicator"
-            :class="{
-              'status-ready': !hasRun,
-              'status-running': isRunning,
-              'status-success': hasRun && !isRunning && lastRunSuccess,
-              'status-error': hasRun && !isRunning && !lastRunSuccess
-            }"
-          >
-            <span v-if="isRunning" class="spinning">⚡</span>
-            <span v-else-if="!hasRun">✅</span>
-            <span v-else-if="lastRunSuccess">✅</span>
-            <span v-else>❌</span>
-            {{ runStatus }}
-          </div>
-        </div>
-        
         <div class="action-buttons">
           <button 
-            class="btn btn-success tooltip" 
+            class="btn btn-success" 
             @click="runCode" 
             :disabled="isRunning"
-            data-tooltip="运行代码 (Ctrl+Enter)"
           >
-            <span v-if="isRunning" class="spinning">⚡</span>
+            <span v-if="isRunning">⚡</span>
             <span v-else>▶️</span>
             {{ isRunning ? '运行中...' : '运行' }}
           </button>
           
           <button 
-            class="btn btn-warning tooltip" 
+            class="btn btn-warning" 
             @click="formatCode"
-            data-tooltip="格式化代码"
           >
             🎨 格式化
           </button>
           
           <button 
-            class="btn btn-secondary tooltip" 
+            class="btn btn-secondary" 
             @click="clearOutput"
-            data-tooltip="清空输出"
           >
             🗑️ 清空
           </button>
           
           <button 
-            class="btn btn-primary tooltip" 
+            class="btn btn-primary" 
             @click="resetCode"
-            data-tooltip="重置为示例代码"
           >
             🔄 重置
           </button>
@@ -92,11 +73,6 @@
       <div class="editor-panel">
         <div class="panel-header">
           <h3>📝 代码编辑器</h3>
-          <div class="editor-info">
-            <span class="line-info" v-if="editorStats.lines">
-              {{ editorStats.lines }} 行 | {{ editorStats.chars }} 字符
-            </span>
-          </div>
         </div>
         <div class="editor-container">
           <div ref="editorRef" class="code-editor"></div>
@@ -111,7 +87,6 @@
             <button 
               class="btn btn-secondary btn-sm" 
               @click="clearOutput"
-              title="清空输出"
             >
               清空
             </button>
@@ -158,17 +133,20 @@
 
 <script>
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers, foldGutter } from '@codemirror/view'
+import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
 import { python } from '@codemirror/lang-python'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
+import { java } from '@codemirror/lang-java'
+import { go } from '@codemirror/lang-go'
+import { shell } from '@codemirror/lang-shell'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
-import { foldKeymap } from '@codemirror/language'
+import { foldKeymap, foldGutter } from '@codemirror/language'
 import { lintKeymap } from '@codemirror/lint'
 
 export default {
@@ -181,168 +159,27 @@ export default {
     const isRunning = ref(false)
     const lastRunSuccess = ref(true)
     const hasRun = ref(false)
-    const editorStats = ref({ lines: 0, chars: 0 })
 
     // 语言映射
     const languageMap = {
       javascript: javascript(),
       python: python(),
+      java: java(),
+      go: go(),
+      shell: shell(),
       html: html(),
       css: css()
     }
 
     // 默认代码模板
-    const getDefaultCode = (lang) => {
-      const templates = {
-        javascript: `// JavaScript 示例代码
-console.log('Hello, World!');
-
-// 计算斐波那契数列
-function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-console.log('斐波那契数列前10项:');
-for (let i = 0; i < 10; i++) {
-  console.log('F(' + i + ') = ' + fibonacci(i));
-}`,
-        python: `# Python 示例代码
-print('Hello, World!')
-
-# 计算斐波那契数列
-def fibonacci(n):
-    if n <= 1:
-        return n
-    return fibonacci(n - 1) + fibonacci(n - 2)
-
-print('斐波那契数列前10项:')
-for i in range(10):
-    print(f'F({i}) = {fibonacci(i)}')`,
-        html: `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web IDE Demo</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            padding: 30px;
-            margin: 20px 0;
-            backdrop-filter: blur(10px);
-        }
-        button {
-            background: #007acc;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s ease;
-        }
-        button:hover {
-            background: #005a9e;
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <h1>🎉 欢迎使用 Web IDE</h1>
-            <p>这是一个功能强大的在线代码编辑器</p>
-            <button onclick="showMessage()">点击我试试</button>
-        </div>
-    </div>
-    
-    <script>
-        function showMessage() {
-            alert('Hello from Web IDE! 🚀');
-            console.log('按钮被点击了!');
-        }
-    </script>
-</body>
-</html>`,
-        css: `/* CSS 示例代码 - 现代卡片设计 */
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  margin: 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-}
-
-.card {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 15px;
-  padding: 30px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-}
-
-.card h2 {
-  color: #fff;
-  margin-bottom: 15px;
-  font-size: 1.8em;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.card p {
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1.6;
-  margin-bottom: 20px;
-}
-
-.btn {
-  background: linear-gradient(45deg, #007acc, #0056b3);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 25px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.btn:hover {
-  background: linear-gradient(45deg, #0056b3, #004085);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}`
-      }
-      return templates[lang] || ''
+    const defaultCodes = {
+      javascript: '',
+      python: '',
+      java: '',
+      go: '',
+      shell: '',
+      html: '',
+      css: ''
     }
 
     // 计算属性
@@ -350,110 +187,85 @@ body {
       const extensions = {
         javascript: '.js',
         python: '.py',
+        java: '.java',
+        go: '.go',
+        shell: '.sh',
         html: '.html',
         css: '.css'
       }
       return `main${extensions[currentLanguage.value]}`
     })
 
-    const runStatus = computed(() => {
-      if (!hasRun.value) return '就绪'
-      if (isRunning.value) return '运行中...'
-      return lastRunSuccess.value ? '运行成功' : '运行失败'
-    })
-
-    // 更新编辑器统计信息
-    const updateEditorStats = () => {
-      if (editor.value) {
-        const doc = editor.value.state.doc
-        editorStats.value = {
-          lines: doc.lines,
-          chars: doc.length
-        }
-      }
-    }
-
     // 初始化编辑器
     const initEditor = () => {
-      if (!editorRef.value) return
+      console.log('初始化编辑器开始')
+      console.log('editorRef.value:', editorRef.value)
+      
+      if (!editorRef.value) {
+        console.error('编辑器容器未找到')
+        return
+      }
 
-      // 清理旧编辑器
       if (editor.value) {
         editor.value.destroy()
       }
 
-      const state = EditorState.create({
-        doc: getDefaultCode(currentLanguage.value),
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          highlightActiveLine(),
-          foldGutter(),
-          EditorView.lineWrapping,
-          history(),
-          autocompletion(),
-          closeBrackets(),
-          highlightSelectionMatches(),
-          languageMap[currentLanguage.value],
-          oneDark,
-          keymap.of([
-            ...defaultKeymap,
-            ...historyKeymap,
-            ...searchKeymap,
-            ...completionKeymap,
-            ...closeBracketsKeymap,
-            ...foldKeymap,
-            ...lintKeymap,
-            {
-              key: 'Ctrl-Enter',
-              run: () => {
-                runCode()
-                return true
-              }
-            }
-          ]),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              updateEditorStats()
-            }
-          })
-        ]
-      })
+      try {
+        const state = EditorState.create({
+          doc: defaultCodes[currentLanguage.value] || '',
+          extensions: [
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            highlightActiveLine(),
+            foldGutter(),
+            EditorView.lineWrapping,
+            history(),
+            autocompletion(),
+            closeBrackets(),
+            highlightSelectionMatches(),
+            languageMap[currentLanguage.value],
+            oneDark,
+            keymap.of([
+              ...defaultKeymap,
+              ...historyKeymap,
+              ...searchKeymap,
+              ...completionKeymap,
+              ...closeBracketsKeymap,
+              ...foldKeymap,
+              ...lintKeymap
+            ])
+          ]
+        })
 
-      editor.value = new EditorView({
-        state,
-        parent: editorRef.value
-      })
+        editor.value = new EditorView({
+          state,
+          parent: editorRef.value
+        })
+        
+        console.log('编辑器创建成功:', editor.value)
 
-      // 初始化统计信息
-      updateEditorStats()
-
-      // 设置焦点
-      nextTick(() => {
-        if (editor.value) {
-          editor.value.focus()
-        }
-      })
+        nextTick(() => {
+          if (editor.value) {
+            editor.value.focus()
+            console.log('编辑器获得焦点')
+          }
+        })
+      } catch (error) {
+        console.error('编辑器初始化失败:', error)
+      }
     }
 
     // 切换语言
     const changeLanguage = () => {
       if (editor.value) {
-        const currentCode = editor.value.state.doc.toString()
-        const isEmpty = !currentCode.trim()
+        editor.value.dispatch({
+          changes: {
+            from: 0,
+            to: editor.value.state.doc.length,
+            insert: defaultCodes[currentLanguage.value]
+          }
+        })
         
-        if (isEmpty) {
-          // 如果是空的，则加载新语言的默认代码
-          editor.value.dispatch({
-            changes: {
-              from: 0,
-              to: editor.value.state.doc.length,
-              insert: getDefaultCode(currentLanguage.value)
-            }
-          })
-        }
-        
-        // 更新语言扩展
         editor.value.dispatch({
           effects: EditorState.reconfigure.of([
             lineNumbers(),
@@ -474,24 +286,10 @@ body {
               ...completionKeymap,
               ...closeBracketsKeymap,
               ...foldKeymap,
-              ...lintKeymap,
-              {
-                key: 'Ctrl-Enter',
-                run: () => {
-                  runCode()
-                  return true
-                }
-              }
-            ]),
-            EditorView.updateListener.of((update) => {
-              if (update.docChanged) {
-                updateEditorStats()
-              }
-            })
+              ...lintKeymap
+            ])
           ])
         })
-        
-        updateEditorStats()
       }
     }
 
@@ -521,6 +319,15 @@ body {
           case 'python':
             result = await runPython(code)
             break
+          case 'java':
+            result = await runJava(code)
+            break
+          case 'go':
+            result = await runGo(code)
+            break
+          case 'shell':
+            result = await runShell(code)
+            break
           case 'html':
             result = await runHTML(code)
             break
@@ -546,30 +353,14 @@ body {
       return new Promise((resolve) => {
         const logs = []
         const originalLog = console.log
-        const originalError = console.error
-        const originalWarn = console.warn
         
-        // 重写 console 方法
         console.log = (...args) => {
           logs.push(args.map(arg => 
             typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
           ).join(' '))
         }
         
-        console.error = (...args) => {
-          logs.push('ERROR: ' + args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-          ).join(' '))
-        }
-        
-        console.warn = (...args) => {
-          logs.push('WARN: ' + args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-          ).join(' '))
-        }
-        
         try {
-          // 使用 Function 构造器执行代码
           const func = new Function(code)
           const result = func()
           
@@ -579,10 +370,7 @@ body {
         } catch (error) {
           logs.push('执行错误: ' + error.message)
         } finally {
-          // 恢复原始 console 方法
           console.log = originalLog
-          console.error = originalError
-          console.warn = originalWarn
         }
         
         resolve(logs.length > 0 ? logs.join('\n') : '代码执行完成，无输出')
@@ -611,6 +399,72 @@ body {
       })
     }
 
+    // Java 执行 (模拟)
+    const runJava = async (code) => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (code.includes('System.out.print')) {
+            const matches = code.match(/System\.out\.print(?:ln)?\(([^)]+)\)/g)
+            if (matches) {
+              const outputs = matches.map(match => {
+                const content = match.match(/System\.out\.print(?:ln)?\(([^)]+)\)/)[1]
+                return content.replace(/["]]/g, '')
+              })
+              resolve(outputs.join('\n'))
+            } else {
+              resolve('Java 程序执行完成')
+            }
+          } else {
+            resolve('Java 程序编译并执行完成，无输出')
+          }
+        }, 1500)
+      })
+    }
+
+    // Go 执行 (模拟)
+    const runGo = async (code) => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (code.includes('fmt.Print')) {
+            const matches = code.match(/fmt\.Print(?:ln|f)?\(([^)]+)\)/g)
+            if (matches) {
+              const outputs = matches.map(match => {
+                const content = match.match(/fmt\.Print(?:ln|f)?\(([^)]+)\)/)[1]
+                return content.replace(/["\`]/g, '')
+              })
+              resolve(outputs.join('\n'))
+            } else {
+              resolve('Go 程序执行完成')
+            }
+          } else {
+            resolve('Go 程序编译并执行完成，无输出')
+          }
+        }, 1200)
+      })
+    }
+
+    // Shell 执行 (模拟)
+    const runShell = async (code) => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (code.includes('echo')) {
+            const matches = code.match(/echo\s+["']?([^"'\n]+)["']?/g)
+            if (matches) {
+              const outputs = matches.map(match => {
+                const content = match.replace(/echo\s+["']?/, '').replace(/["']$/, '')
+                return content
+              })
+              resolve(outputs.join('\n'))
+            } else {
+              resolve('Shell 脚本执行完成')
+            }
+          } else {
+            resolve('Shell 脚本执行完成，无输出')
+          }
+        }, 800)
+      })
+    }
+
     // HTML 执行
     const runHTML = async (code) => {
       return new Promise((resolve) => {
@@ -633,31 +487,7 @@ body {
     const runCSS = async (code) => {
       return new Promise((resolve) => {
         try {
-          const htmlContent = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSS 预览</title>
-    <style>
-${code}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <h2>CSS 样式预览</h2>
-            <p>这是一个演示段落，用于展示 CSS 样式效果。</p>
-            <button class="btn">示例按钮</button>
-        </div>
-        <div class="card">
-            <h2>另一个卡片</h2>
-            <p>您可以在左侧编辑器中修改 CSS 代码，然后点击运行查看效果。</p>
-            <button class="btn">另一个按钮</button>
-        </div>
-    </div>
-</body>
-</html>`
+          const htmlContent = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n${code}\n</style>\n</head>\n<body>\n<div class="container">\n<div class="card">\n<h2>CSS 样式预览</h2>\n<p>这是一个演示段落</p>\n<button class="btn">示例按钮</button>\n</div>\n</div>\n</body>\n</html>`
           
           const newWindow = window.open('', '_blank')
           if (newWindow) {
@@ -683,13 +513,13 @@ ${code}
       try {
         switch (currentLanguage.value) {
           case 'javascript':
-            formattedCode = formatJavaScript(code)
+            formattedCode = code.replace(/{/g, '{\n').replace(/}/g, '\n}').replace(/;/g, ';\n').replace(/\n\s*\n/g, '\n').trim()
             break
           case 'html':
-            formattedCode = formatHTML(code)
+            formattedCode = code.replace(/></g, '>\n<')
             break
           case 'css':
-            formattedCode = formatCSS(code)
+            formattedCode = code.replace(/{/g, ' {\n').replace(/}/g, '\n}\n').replace(/;/g, ';\n')
             break
           default:
             formattedCode = code.split('\n').map(line => line.trim()).join('\n')
@@ -707,37 +537,6 @@ ${code}
       }
     }
 
-    // 简单的格式化函数
-    const formatJavaScript = (code) => {
-      return code.replace(/{/g, '{\n').replace(/}/g, '\n}').replace(/;/g, ';\n').replace(/\n\s*\n/g, '\n').trim()
-    }
-
-    const formatHTML = (code) => {
-      let formatted = code.replace(/></g, '>\n<')
-      const lines = formatted.split('\n')
-      let indent = 0
-      return lines.map(line => {
-        const trimmed = line.trim()
-        if (trimmed.startsWith('</')) indent--
-        const result = '  '.repeat(Math.max(0, indent)) + trimmed
-        if (trimmed.startsWith('<') && !trimmed.startsWith('</') && !trimmed.endsWith('/>'))
-          indent++
-        return result
-      }).join('\n')
-    }
-
-    const formatCSS = (code) => {
-      let formatted = code.replace(/{/g, ' {\n').replace(/}/g, '\n}\n').replace(/;/g, ';\n')
-      const lines = formatted.split('\n')
-      return lines.map(line => {
-        const trimmed = line.trim()
-        if (trimmed.includes(':') && !trimmed.includes('{') && !trimmed.includes('}')) {
-          return '  ' + trimmed
-        }
-        return trimmed
-      }).filter(line => line.length > 0).join('\n')
-    }
-
     // 清空输出
     const clearOutput = () => {
       output.value = ''
@@ -752,16 +551,21 @@ ${code}
           changes: {
             from: 0,
             to: editor.value.state.doc.length,
-            insert: getDefaultCode(currentLanguage.value)
+            insert: defaultCodes[currentLanguage.value]
           }
         })
-        updateEditorStats()
       }
     }
 
     // 组件挂载
     onMounted(() => {
-      initEditor()
+      console.log('组件已挂载')
+      // 延迟初始化编辑器，确保DOM完全渲染
+      nextTick(() => {
+        setTimeout(() => {
+          initEditor()
+        }, 100)
+      })
     })
 
     return {
@@ -772,8 +576,6 @@ ${code}
       isRunning,
       lastRunSuccess,
       hasRun,
-      runStatus,
-      editorStats,
       changeLanguage,
       runCode,
       formatCode,
@@ -793,7 +595,6 @@ ${code}
   color: #ffffff;
 }
 
-/* 工具栏样式 */
 .toolbar {
   display: flex;
   align-items: center;
@@ -802,7 +603,6 @@ ${code}
   background: #2d2d2d;
   border-bottom: 1px solid #444;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  z-index: 100;
 }
 
 .toolbar-left {
@@ -862,11 +662,6 @@ ${code}
   gap: 16px;
 }
 
-.status-info {
-  display: flex;
-  align-items: center;
-}
-
 .action-buttons {
   display: flex;
   gap: 8px;
@@ -877,14 +672,12 @@ ${code}
   font-size: 12px;
 }
 
-/* 主要内容区域 */
 .main-content {
   flex: 1;
   display: flex;
   overflow: hidden;
 }
 
-/* 面板样式 */
 .editor-panel,
 .output-panel {
   display: flex;
@@ -919,19 +712,12 @@ ${code}
   color: #ffffff;
 }
 
-.editor-info,
 .output-controls {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.line-info {
-  font-size: 12px;
-  color: #888;
-}
-
-/* 编辑器容器 */
 .editor-container {
   flex: 1;
   overflow: hidden;
@@ -939,10 +725,46 @@ ${code}
 
 .code-editor {
   height: 100%;
+  width: 100%;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
-/* 输出容器 */
+/* CodeMirror 编辑器样式 */
+.code-editor :deep(.cm-editor) {
+  height: 100%;
+  font-size: 14px;
+}
+
+.code-editor :deep(.cm-focused) {
+  outline: none;
+}
+
+.code-editor :deep(.cm-scroller) {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.code-editor :deep(.cm-gutters) {
+  background-color: #2d2d2d;
+  border-right: 1px solid #444;
+}
+
+.code-editor :deep(.cm-lineNumbers .cm-gutterElement) {
+  color: #858585;
+  font-size: 13px;
+}
+
+.code-editor :deep(.cm-cursor) {
+  border-left: 2px solid #ffffff;
+}
+
+.code-editor :deep(.cm-activeLine) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.code-editor :deep(.cm-activeLineGutter) {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 .output-container {
   flex: 1;
   overflow: auto;
@@ -1023,7 +845,15 @@ ${code}
   font-size: 16px;
 }
 
-/* 响应式设计 */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 1024px) {
   .output-panel {
     width: 350px;
