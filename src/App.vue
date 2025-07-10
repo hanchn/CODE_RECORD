@@ -1,17 +1,61 @@
 <template>
   <div class="ide-container">
-    <!-- 代码编辑器 -->
-    <div class="editor-container">
-      <div ref="editorRef" class="editor"></div>
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <h1 class="title">Web IDE</h1>
+        <select v-model="currentLanguage" @change="changeLanguage" class="language-select">
+          <option value="javascript">JavaScript</option>
+          <option value="python">Python</option>
+          <option value="html">HTML</option>
+          <option value="css">CSS</option>
+        </select>
+      </div>
+      <div class="toolbar-right">
+        <button @click="runCode" class="btn btn-primary" :disabled="isRunning">
+          {{ isRunning ? '运行中...' : '运行代码' }}
+        </button>
+        <button @click="clearOutput" class="btn btn-secondary">清空输出</button>
+        <button @click="formatCode" class="btn btn-secondary">格式化</button>
+      </div>
+    </div>
+
+    <!-- 主要内容区域 -->
+    <div class="main-content">
+      <!-- 左侧编辑器 -->
+      <div class="editor-panel">
+        <div class="panel-header">
+          <span class="panel-title">代码编辑器</span>
+          <span class="file-info">{{ currentFile }}</span>
+        </div>
+        <div ref="editorRef" class="editor"></div>
+      </div>
+
+      <!-- 右侧输出面板 -->
+      <div class="output-panel">
+        <div class="panel-header">
+          <span class="panel-title">输出结果</span>
+          <span class="status" :class="{ 'success': lastRunSuccess, 'error': !lastRunSuccess && hasRun }">
+            {{ runStatus }}
+          </span>
+        </div>
+        <div class="output-content">
+          <pre v-if="output" class="output-text">{{ output }}</pre>
+          <div v-else class="output-placeholder">点击"运行代码"查看输出结果</div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers, foldGutter } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
+import { python } from '@codemirror/lang-python'
+import { html } from '@codemirror/lang-html'
+import { css } from '@codemirror/lang-css'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
@@ -20,10 +64,15 @@ import { foldKeymap } from '@codemirror/language'
 import { lintKeymap } from '@codemirror/lint'
 
 export default {
-  name: 'App',
+  name: 'WebIDE',
   setup() {
     const editorRef = ref(null)
     const editor = ref(null)
+    const currentLanguage = ref('javascript')
+    const output = ref('')
+    const isRunning = ref(false)
+    const lastRunSuccess = ref(true)
+    const hasRun = ref(false)
 
     // 初始化编辑器
     const initEditor = () => {
