@@ -79,13 +79,14 @@
           </button>
           
           <button 
-            class="btn btn-danger btn-compact"
+            class="btn btn-compact"
             @click="toggleVideoRecording"
-            :disabled="isAutoTyping"
+            :disabled="isAutoTyping && !isRecording"
+            :class="{ 'btn-danger': isRecording, 'btn-secondary': !isRecording }"
             title="录制视频"
           >
-            <span v-if="isRecording">⏹️</span>
-            <span v-else>🎥</span>
+            <span v-if="isRecording">⏹️ 停止录制</span>
+            <span v-else>🎥 录制视频</span>
           </button>
           
           <div class="btn-group">
@@ -889,6 +890,11 @@ export default {
         mediaRecorder.value.onstop = () => {
           const blob = new Blob(recordedChunks.value, { type: 'video/webm' })
           recordedVideoUrl.value = URL.createObjectURL(blob)
+          
+          // 录制完成后恢复界面显示
+          restoreUIAfterRecording()
+          
+          // 自动弹出预览窗口
           showVideoModal.value = true
           isRecording.value = false
         }
@@ -900,6 +906,9 @@ export default {
           }
         }
 
+        // 开始录制前隐藏界面元素
+        hideUIForRecording()
+        
         // 开始录制
         mediaRecorder.value.start(1000) // 每秒收集一次数据
         isRecording.value = true
@@ -918,6 +927,8 @@ export default {
         console.error('录制失败:', error)
         alert('录制失败：' + error.message)
         isRecording.value = false
+        // 发生错误时也要恢复界面
+        restoreUIAfterRecording()
       }
     }
 
@@ -952,6 +963,53 @@ export default {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+    }
+
+    // 录制时隐藏界面元素
+    const hideUIForRecording = () => {
+      // 隐藏设置面板
+      showSettings.value = false
+      
+      // 隐藏右侧输出面板
+      const outputPanel = document.querySelector('.output-panel')
+      if (outputPanel) {
+        outputPanel.style.display = 'none'
+      }
+      
+      // 隐藏顶部工具栏的设置相关按钮
+      const settingsToggle = document.querySelector('.settings-toggle')
+      if (settingsToggle) {
+        settingsToggle.style.display = 'none'
+      }
+      
+      // 调整编辑器面板宽度占满整个容器
+      const editorPanel = document.querySelector('.editor-panel')
+      if (editorPanel) {
+        editorPanel.style.width = '100%'
+        editorPanel.style.flex = '1'
+      }
+    }
+
+    // 录制完成后恢复界面元素
+    const restoreUIAfterRecording = () => {
+      // 恢复右侧输出面板
+      const outputPanel = document.querySelector('.output-panel')
+      if (outputPanel) {
+        outputPanel.style.display = ''
+      }
+      
+      // 恢复顶部工具栏的设置按钮
+      const settingsToggle = document.querySelector('.settings-toggle')
+      if (settingsToggle) {
+        settingsToggle.style.display = ''
+      }
+      
+      // 恢复编辑器面板原始样式
+      const editorPanel = document.querySelector('.editor-panel')
+      if (editorPanel) {
+        editorPanel.style.width = ''
+        editorPanel.style.flex = ''
+      }
     }
 
     const autoTypeOutput = async () => {
@@ -1664,6 +1722,36 @@ select:focus {
   height: auto;
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.video-modal .modal-content {
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.recorded-video {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: #000;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-secondary:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  color: #fff;
 }
 
 .modal-footer {
