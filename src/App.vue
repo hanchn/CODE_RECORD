@@ -12,7 +12,7 @@
         </div>
       
       <!-- IDE水印 - 只在截图或录制时显示 -->
-      <div class="ide-watermark" v-if="watermarkEnabled && (isGeneratingImage || isRecording)">
+      <div class="ide-watermark" v-if="watermarkEnabled && watermarkText && (isGeneratingImage || isRecording)">
         <div 
           v-for="(pos, index) in watermarkPositions" 
           :key="index"
@@ -1138,6 +1138,7 @@ export default {
         // 开始3秒倒计时
         isCountingDown.value = true
         countdownNumber.value = 3
+        isRecording.value = true // 提前设置录制状态以显示水印
         
         // 倒计时逻辑
         const countdown = () => {
@@ -1150,7 +1151,6 @@ export default {
                 // 倒计时结束，开始实际录制
                 isCountingDown.value = false
                 mediaRecorder.value.start(1000) // 每秒收集一次数据
-                isRecording.value = true
                 
                 // 延迟开始自动化输出，给用户时间准备
                 setTimeout(() => {
