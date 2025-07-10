@@ -141,7 +141,8 @@ import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
 import { java } from '@codemirror/lang-java'
 import { go } from '@codemirror/lang-go'
-import { shell } from '@codemirror/lang-shell'
+import { StreamLanguage } from '@codemirror/language'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
@@ -166,7 +167,7 @@ export default {
       python: python(),
       java: java(),
       go: go(),
-      shell: shell(),
+      shell: StreamLanguage.define(shell),
       html: html(),
       css: css()
     }
