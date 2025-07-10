@@ -133,18 +133,7 @@
       </div>
     </div>
     
-    <!-- Slogan显示（仅在录制/截图时） -->
-    <div class="slogan-container" v-if="sloganEnabled && sloganText && (isGeneratingImage || isRecording)">
-      <div 
-        class="slogan-text"
-        :style="{
-          position: 'fixed',
-          ...getSloganPosition()
-        }"
-      >
-        {{ sloganText }}
-      </div>
-    </div>
+
     
     <!-- 设置面板 -->
     <div v-if="showSettings" class="settings-panel">
@@ -246,32 +235,8 @@
               </select>
             </div>
           </div>
-          <div class="settings-row" style="margin-top: 12px;">
-            <div class="setting-item">
-              <label>
-                <input 
-                  type="checkbox" 
-                  v-model="sloganEnabled"
-                  class="watermark-checkbox"
-                >
-                启用Slogan（仅在录制/截图时显示）
-              </label>
-            </div>
-          </div>
-          <div class="settings-row" v-if="sloganEnabled">
-            <div class="setting-item">
-              <label for="sloganText">Slogan文本:</label>
-              <input 
-                id="sloganText" 
-                type="text" 
-                v-model="sloganText"
-                class="watermark-input"
-                placeholder="请输入Slogan文本"
-                maxlength="30"
-              >
-            </div>
-          </div>
-        </div>''
+
+        </div>
       </div>
     </div>
     
@@ -437,10 +402,7 @@ export default {
     const watermarkText = ref('AUVWEB')
     const watermarkOpacity = ref('0.25')
     
-    // Slogan相关配置
-    const sloganEnabled = ref(false)
-    const sloganText = ref('')
-    const sloganPosition = ref('')
+
 
     // 计算水印位置
     const watermarkPositions = computed(() => {
@@ -906,29 +868,16 @@ export default {
       document.documentElement.style.setProperty('--watermark-opacity', watermarkOpacity.value)
     }
 
-    // 获取随机slogan位置
-    const getSloganPosition = () => {
-      const positions = [
-        { top: '20px', left: '20px' },      // 左上
-        { top: '20px', right: '20px' },     // 右上
-        { bottom: '20px', left: '20px' },   // 左下
-        { bottom: '20px', right: '20px' }   // 右下
-      ]
-      
-      // 如果位置还没有设置或需要重新随机，则随机选择一个位置
-      if (!sloganPosition.value) {
-        const randomIndex = Math.floor(Math.random() * positions.length)
-        sloganPosition.value = JSON.stringify(positions[randomIndex])
-      }
-      
-      return JSON.parse(sloganPosition.value)
-    }
+
 
     // 生成代码图片
     const generateCodeImage = async () => {
       if (isGeneratingImage.value) return
       
       isGeneratingImage.value = true
+      
+      // 给一点时间让Slogan显示出来
+      await new Promise(resolve => setTimeout(resolve, 100))
       
       try {
         // 获取编辑器内容
@@ -1563,9 +1512,7 @@ a
       watermarkText,
       watermarkOpacity,
       watermarkPositions,
-      sloganEnabled,
-      sloganText,
-      getSloganPosition,
+
       changeLanguage,
       runCode,
       formatCode,

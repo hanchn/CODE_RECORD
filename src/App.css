@@ -182,32 +182,7 @@
   opacity: var(--watermark-opacity, 0.25);
 }
 
-/* Slogan样式 */
-.slogan-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  z-index: 10000;
-  overflow: hidden;
-}
 
-.slogan-text {
-  background: rgba(0, 0, 0, 0.7);
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-family: Arial, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  user-select: none;
-  pointer-events: none;
-  white-space: nowrap;
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
 
 .settings-content {
   max-width: 1200px;
