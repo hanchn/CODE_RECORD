@@ -869,62 +869,76 @@ export default {
     // 开始录制
     const startRecording = async () => {
       try {
-        // 获取编辑器容器元素
-        const editorPanel = document.querySelector('.editor-panel')
-        if (!editorPanel) {
-          alert('找不到编辑器区域')
-          return
-        }
-
-        // 检查浏览器是否支持屏幕录制
+        // 检查浏览器兼容性
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-          alert('您的浏览器不支持屏幕录制功能，请使用Chrome、Firefox或Edge浏览器')
+          alert('您的浏览器不支持屏幕录制功能，请使用最新版本的 Chrome、Firefox 或 Edge 浏览器。')
           return
         }
-
-        // 保存初始代码状态
-        initialCode.value = code.value
         
-        // 提示用户即将开始录制
-        const userConfirm = confirm('即将开始录制代码演示。\n\n请在接下来的屏幕共享对话框中：\n1. 选择"整个屏幕"或"浏览器窗口"\n2. 点击"共享"按钮\n\n录制将自动开始代码输出演示。\n\n是否继续？')
+        // 提前提示用户录制选项
+        const userChoice = confirm(
+          '即将开始屏幕录制。\n\n' +
+          '在弹出的屏幕共享对话框中，您可以选择：\n' +
+          '• 整个屏幕 - 录制完整桌面\n' +
+          '• 窗口 - 录制特定应用窗口\n' +
+          '• 标签页 - 仅录制当前浏览器标签\n\n' +
+          '建议选择"窗口"并选择浏览器窗口以获得最佳效果。\n\n' +
+          '是否继续？'
+        )
         
-        if (!userConfirm) {
+        if (!userChoice) {
           return
         }
-
-        // 请求屏幕录制权限
+        
+        // 请求屏幕录制权限，提供更多选项
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
-            mediaSource: 'screen',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
+            mediaSource: 'screen', // 允许用户选择屏幕、窗口或标签页
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            frameRate: { ideal: 30, max: 60 }
           },
-          audio: false
-        })
-
-        // 创建MediaRecorder
-        recordedChunks.value = []
-        
-        // 检查浏览器支持的编码格式
-        let mimeType = 'video/webm;codecs=vp9'
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'video/webm;codecs=vp8'
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm'
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
           }
+        })
+        
+        // 动态检测支持的MIME类型
+        const getSupportedMimeType = () => {
+          const types = [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8',
+            'video/webm',
+            'video/mp4'
+          ]
+          
+          for (const type of types) {
+            if (MediaRecorder.isTypeSupported(type)) {
+              return type
+            }
+          }
+          return 'video/webm' // 默认回退
         }
         
-        mediaRecorder.value = new MediaRecorder(stream, { mimeType })
-
-        // 监听数据可用事件
+        const mimeType = getSupportedMimeType()
+        mediaRecorder.value = new MediaRecorder(stream, {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000, // 2.5 Mbps
+          audioBitsPerSecond: 128000   // 128 kbps
+        })
+        
+        recordedChunks.value = []
+        
         mediaRecorder.value.ondataavailable = (event) => {
           if (event.data.size > 0) {
             recordedChunks.value.push(event.data)
           }
         }
-
-        // 监听录制停止事件
+        
         mediaRecorder.value.onstop = () => {
           const blob = new Blob(recordedChunks.value, { type: mimeType })
           recordedVideoUrl.value = URL.createObjectURL(blob)
@@ -935,53 +949,61 @@ export default {
           // 恢复代码到初始状态
           if (initialCode.value && editor.value) {
             code.value = initialCode.value
-            editor.value.setValue(initialCode.value)
+            editor.value.dispatch({
+              changes: {
+                from: 0,
+                to: editor.value.state.doc.length,
+                insert: initialCode.value
+              }
+            })
           }
           
           // 自动弹出预览窗口
           showVideoModal.value = true
           isRecording.value = false
+          
+          // 停止所有轨道
+          stream.getTracks().forEach(track => track.stop())
         }
-
-        // 监听流结束事件（用户手动停止屏幕共享）
-        stream.getVideoTracks()[0].onended = () => {
+        
+        // 监听用户手动停止屏幕共享
+        stream.getVideoTracks()[0].addEventListener('ended', () => {
           if (isRecording.value) {
             stopRecording()
           }
+        })
+        
+        // 保存当前代码状态
+        if (editor.value) {
+          initialCode.value = editor.value.state.doc.toString()
         }
         
-        // 开始录制前隐藏界面元素
+        // 隐藏界面元素
         hideUIForRecording()
         
-        // 开始录制
         mediaRecorder.value.start(1000) // 每秒收集一次数据
         isRecording.value = true
-
-        // 延迟一下让用户完成屏幕选择，然后开始自动化输出
+        
+        // 延迟开始自动化输出，给用户时间准备
         setTimeout(() => {
           if (isRecording.value) {
             autoTypeOutput()
           }
-        }, 3000) // 增加延迟时间，给用户更多时间准备
-
+        }, 3000) // 增加到3秒延迟
+        
       } catch (error) {
-        console.error('录制失败:', error)
+        console.error('录制启动失败:', error)
         
         // 提供更友好的错误信息
-        let errorMessage = '录制失败：'
         if (error.name === 'NotAllowedError') {
-          errorMessage += '用户拒绝了屏幕录制权限，请重新尝试并允许屏幕共享'
+          alert('屏幕录制权限被拒绝。请刷新页面并允许屏幕共享权限。')
         } else if (error.name === 'NotSupportedError') {
-          errorMessage += '您的浏览器不支持屏幕录制功能'
-        } else if (error.name === 'AbortError') {
-          errorMessage += '录制被用户取消'
+          alert('您的浏览器不支持屏幕录制功能。请使用最新版本的 Chrome、Firefox 或 Edge 浏览器。')
         } else {
-          errorMessage += error.message
+          alert(`录制启动失败: ${error.message}`)
         }
         
-        alert(errorMessage)
         isRecording.value = false
-        // 发生错误时也要恢复界面
         restoreUIAfterRecording()
       }
     }
@@ -1036,16 +1058,21 @@ export default {
       // 隐藏设置面板
       showSettings.value = false
       
+      // 隐藏整个顶部工具栏
+      const toolbar = document.querySelector('.toolbar')
+      if (toolbar) {
+        toolbar.style.display = 'none'
+      }
+      
       // 隐藏右侧输出面板
       const outputPanel = document.querySelector('.output-panel')
       if (outputPanel) {
         outputPanel.style.display = 'none'
       }
-      
-      // 隐藏顶部工具栏的设置相关按钮
-      const settingsToggle = document.querySelector('.settings-toggle')
-      if (settingsToggle) {
-        settingsToggle.style.display = 'none'
+      // 隐藏编辑器面板的标题
+      const editorPanelHeader = document.querySelector('.editor-panel .panel-header')
+      if (editorPanelHeader) {
+        editorPanelHeader.style.display = 'none'
       }
       
       // 调整编辑器面板宽度占满整个容器
@@ -1054,20 +1081,33 @@ export default {
         editorPanel.style.width = '100%'
         editorPanel.style.flex = '1'
       }
+      
+      // 调整主内容区域，移除顶部边距
+      const mainContent = document.querySelector('.main-content')
+      if (mainContent) {
+        mainContent.style.paddingTop = '0'
+        mainContent.style.height = '100vh'
+      }
     }
 
     // 录制完成后恢复界面元素
     const restoreUIAfterRecording = () => {
+      // 恢复顶部工具栏
+      const toolbar = document.querySelector('.toolbar')
+      if (toolbar) {
+        toolbar.style.display = ''
+      }
+      
       // 恢复右侧输出面板
       const outputPanel = document.querySelector('.output-panel')
       if (outputPanel) {
         outputPanel.style.display = ''
       }
       
-      // 恢复顶部工具栏的设置按钮
-      const settingsToggle = document.querySelector('.settings-toggle')
-      if (settingsToggle) {
-        settingsToggle.style.display = ''
+      // 恢复编辑器面板的标题
+      const editorPanelHeader = document.querySelector('.editor-panel .panel-header')
+      if (editorPanelHeader) {
+        editorPanelHeader.style.display = ''
       }
       
       // 恢复编辑器面板原始样式
@@ -1075,6 +1115,13 @@ export default {
       if (editorPanel) {
         editorPanel.style.width = ''
         editorPanel.style.flex = ''
+      }
+      
+      // 恢复主内容区域原始样式
+      const mainContent = document.querySelector('.main-content')
+      if (mainContent) {
+        mainContent.style.paddingTop = ''
+        mainContent.style.height = ''
       }
     }
 
