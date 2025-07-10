@@ -78,6 +78,16 @@
             <span v-else>📸</span>
           </button>
           
+          <button 
+            class="btn btn-danger btn-compact"
+            @click="toggleVideoRecording"
+            :disabled="isAutoTyping"
+            title="录制视频"
+          >
+            <span v-if="isRecording">⏹️</span>
+            <span v-else>🎥</span>
+          </button>
+          
           <div class="btn-group">
             <button 
               class="btn btn-warning btn-compact" 
@@ -245,6 +255,25 @@
         </div>
       </div>
     </div>
+    
+    <!-- 视频预览弹窗 -->
+    <div v-if="showVideoModal" class="modal-overlay" @click="closeVideoModal">
+      <div class="modal-content video-modal" @click.stop>
+        <div class="modal-header">
+          <h3>代码录制预览</h3>
+          <button class="close-btn" @click="closeVideoModal">×</button>
+        </div>
+        <div class="modal-body">
+          <video v-if="recordedVideoUrl" :src="recordedVideoUrl" controls class="recorded-video">
+            您的浏览器不支持视频播放。
+          </video>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" @click="downloadVideo">📥 下载视频</button>
+          <button class="btn btn-secondary" @click="closeVideoModal">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -285,6 +314,11 @@ export default {
     const showImageModal = ref(false)
     const generatedImageUrl = ref('')
     const showSettings = ref(false)
+    const isRecording = ref(false)
+    const showVideoModal = ref(false)
+    const recordedVideoUrl = ref('')
+    const mediaRecorder = ref(null)
+    const recordedChunks = ref([])
 
     // 语言映射
     const languageMap = {
@@ -808,6 +842,118 @@ export default {
       document.body.removeChild(link)
     }
 
+    // 开始/停止视频录制
+    const toggleVideoRecording = async () => {
+      if (isRecording.value) {
+        stopRecording()
+      } else {
+        await startRecording()
+      }
+    }
+
+    // 开始录制
+    const startRecording = async () => {
+      try {
+        // 获取编辑器容器元素
+        const editorPanel = document.querySelector('.editor-panel')
+        if (!editorPanel) {
+          alert('找不到编辑器区域')
+          return
+        }
+
+        // 请求屏幕录制权限
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            mediaSource: 'screen',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        })
+
+        // 创建MediaRecorder
+        recordedChunks.value = []
+        mediaRecorder.value = new MediaRecorder(stream, {
+          mimeType: 'video/webm;codecs=vp9'
+        })
+
+        // 监听数据可用事件
+        mediaRecorder.value.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunks.value.push(event.data)
+          }
+        }
+
+        // 监听录制停止事件
+        mediaRecorder.value.onstop = () => {
+          const blob = new Blob(recordedChunks.value, { type: 'video/webm' })
+          recordedVideoUrl.value = URL.createObjectURL(blob)
+          showVideoModal.value = true
+          isRecording.value = false
+        }
+
+        // 监听流结束事件（用户手动停止屏幕共享）
+        stream.getVideoTracks()[0].onended = () => {
+          if (isRecording.value) {
+            stopRecording()
+          }
+        }
+
+        // 开始录制
+        mediaRecorder.value.start(1000) // 每秒收集一次数据
+        isRecording.value = true
+
+        // 提示用户选择编辑器区域
+        alert('请在屏幕共享中选择整个浏览器窗口，然后点击"共享"。录制将自动开始代码输出演示。')
+
+        // 延迟一下让用户完成屏幕选择，然后开始自动化输出
+        setTimeout(() => {
+          if (isRecording.value) {
+            autoTypeOutput()
+          }
+        }, 2000)
+
+      } catch (error) {
+        console.error('录制失败:', error)
+        alert('录制失败：' + error.message)
+        isRecording.value = false
+      }
+    }
+
+    // 停止录制
+    const stopRecording = () => {
+      if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
+        mediaRecorder.value.stop()
+        
+        // 停止所有视频轨道
+        mediaRecorder.value.stream.getTracks().forEach(track => {
+          track.stop()
+        })
+      }
+    }
+
+    // 关闭视频预览弹窗
+    const closeVideoModal = () => {
+      showVideoModal.value = false
+      if (recordedVideoUrl.value) {
+        URL.revokeObjectURL(recordedVideoUrl.value)
+        recordedVideoUrl.value = ''
+      }
+    }
+
+    // 下载视频
+    const downloadVideo = () => {
+      if (!recordedVideoUrl.value) return
+      
+      const link = document.createElement('a')
+      link.download = `code-recording-${new Date().getTime()}.webm`
+      link.href = recordedVideoUrl.value
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+
     const autoTypeOutput = async () => {
       if (!editor.value || isAutoTyping.value) return
 
@@ -908,6 +1054,9 @@ export default {
       showImageModal,
       generatedImageUrl,
       showSettings,
+      isRecording,
+      showVideoModal,
+      recordedVideoUrl,
       changeLanguage,
       runCode,
       formatCode,
@@ -917,7 +1066,10 @@ export default {
       updateEditorStyle,
       generateCodeImage,
       closeImageModal,
-      downloadImage
+      downloadImage,
+      toggleVideoRecording,
+      closeVideoModal,
+      downloadVideo
     }
   }
 }
@@ -940,12 +1092,192 @@ export default {
   background: #2d2d2d;
   border-bottom: 1px solid #444;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  min-height: 60px;
 }
 
+/* 工具栏区域布局 */
 .toolbar-left {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 控制组样式 */
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+/* 按钮组样式 */
+.primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+/* 按钮尺寸变体 */
+.btn-large {
+  padding: 10px 20px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.btn-compact {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* 选择器样式变体 */
+.select-primary {
+  padding: 8px 12px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.select-primary:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.select-compact {
+  padding: 4px 8px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 12px;
+  min-width: 80px;
+}
+
+.select-compact:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+/* 设置面板样式 */
+.settings-panel {
+  background: #2d2d2d;
+  border-bottom: 1px solid #444;
+  padding: 16px 20px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.settings-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.settings-group {
+  margin-bottom: 20px;
+}
+
+.settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-group h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-item label {
+  font-size: 13px;
+  color: #cccccc;
+  white-space: nowrap;
+}
+
+/* 设置切换按钮 */
+.settings-toggle {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.settings-toggle.active {
+  background: #007acc;
+  color: #ffffff;
+}
+
+.settings-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-toggle.active:hover {
+  background: #005a9e;
+}
+
+/* 按钮状态样式 */
+.btn-ghost {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-ghost.active {
+  background: #007acc;
+  border-color: #007acc;
+  color: #ffffff;
 }
 
 .logo {
@@ -975,111 +1307,6 @@ export default {
 .file-name {
   color: #ffd700;
   font-weight: 500;
-}
-
-.toolbar-center {
-  display: flex;
-  align-items: center;
-}
-
-.language-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.language-selector label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.speed-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 20px;
-}
-
-.speed-selector label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.speed-selector select {
-  padding: 6px 12px;
-  background: #3c3c3c;
-  color: #ffffff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.speed-selector select:focus {
-  outline: none;
-  border-color: #007acc;
-}
-
-.font-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 20px;
-}
-
-.font-selector label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.font-selector select {
-  padding: 6px 12px;
-  background: #3c3c3c;
-  color: #ffffff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.font-selector select:focus {
-  outline: none;
-  border-color: #007acc;
-}
-
-.lineheight-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 20px;
-}
-
-.lineheight-selector label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.lineheight-selector select {
-  padding: 6px 12px;
-  background: #3c3c3c;
-  color: #ffffff;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.lineheight-selector select:focus {
-  outline: none;
-  border-color: #007acc;
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
 }
 
 .btn-sm {
@@ -1448,19 +1675,44 @@ select:focus {
   border-top: 1px solid #444;
 }
 
+/* 响应式设计 */
 @media (max-width: 1024px) {
-  .output-panel {
-    width: 350px;
-  }
-  
   .toolbar {
     flex-wrap: wrap;
-    gap: 12px;
+    min-height: auto;
+    padding: 8px 16px;
   }
   
   .toolbar-center {
     order: 3;
-    flex-basis: 100%;
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  
+  .toolbar-right {
+    gap: 8px;
+  }
+  
+  .secondary-actions {
+    gap: 4px;
+  }
+  
+  .btn-group {
+    gap: 2px;
+  }
+  
+  .settings-panel {
+    padding: 12px 16px;
+  }
+  
+  .settings-row {
+    gap: 16px;
+  }
+  
+  .output-panel {
+    width: 350px;
+    min-width: 300px;
   }
 }
 
@@ -1478,10 +1730,44 @@ select:focus {
     width: 100%;
     max-width: 100%;
     height: 300px;
+    min-width: unset;
   }
   
   .toolbar {
     padding: 8px 12px;
+  }
+  
+  .toolbar-left {
+    gap: 12px;
+  }
+  
+  .logo {
+    font-size: 18px;
+  }
+  
+  .logo-icon {
+    font-size: 20px;
+  }
+  
+  .btn-large {
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+  
+  .btn-compact {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .setting-item {
+    width: 100%;
+    justify-content: space-between;
   }
   
   .action-buttons {
