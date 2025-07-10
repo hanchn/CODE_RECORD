@@ -62,7 +62,7 @@
           <button 
             class="btn btn-warning tooltip" 
             @click="formatCode"
-            data-tooltip="格式化代码 (Shift+Alt+F)"
+            data-tooltip="格式化代码"
           >
             🎨 格式化
           </button>
@@ -192,8 +192,9 @@ export default {
     }
 
     // 默认代码模板
-    const defaultCode = {
-      javascript: `// JavaScript 示例代码
+    const getDefaultCode = (lang) => {
+      const templates = {
+        javascript: `// JavaScript 示例代码
 console.log('Hello, World!');
 
 // 计算斐波那契数列
@@ -204,9 +205,9 @@ function fibonacci(n) {
 
 console.log('斐波那契数列前10项:');
 for (let i = 0; i < 10; i++) {
-  console.log(`F(${i}) = ${fibonacci(i)}`);
+  console.log('F(' + i + ') = ' + fibonacci(i));
 }`,
-      python: `# Python 示例代码
+        python: `# Python 示例代码
 print('Hello, World!')
 
 # 计算斐波那契数列
@@ -218,7 +219,7 @@ def fibonacci(n):
 print('斐波那契数列前10项:')
 for i in range(10):
     print(f'F({i}) = {fibonacci(i)}')`,
-      html: `<!DOCTYPE html>
+        html: `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -276,7 +277,7 @@ for i in range(10):
     </script>
 </body>
 </html>`,
-      css: `/* CSS 示例代码 - 现代卡片设计 */
+        css: `/* CSS 示例代码 - 现代卡片设计 */
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
@@ -339,19 +340,9 @@ body {
   background: linear-gradient(45deg, #0056b3, #004085);
   transform: translateY(-2px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .container {
-    grid-template-columns: 1fr;
-    padding: 10px;
-  }
-  
-  .card {
-    padding: 20px;
-  }
 }`
+      }
+      return templates[lang] || ''
     }
 
     // 计算属性
@@ -392,7 +383,7 @@ body {
       }
 
       const state = EditorState.create({
-        doc: defaultCode[currentLanguage.value],
+        doc: getDefaultCode(currentLanguage.value),
         extensions: [
           lineNumbers(),
           highlightActiveLineGutter(),
@@ -417,13 +408,6 @@ body {
               key: 'Ctrl-Enter',
               run: () => {
                 runCode()
-                return true
-              }
-            },
-            {
-              key: 'Shift-Alt-f',
-              run: () => {
-                formatCode()
                 return true
               }
             }
@@ -456,15 +440,15 @@ body {
     const changeLanguage = () => {
       if (editor.value) {
         const currentCode = editor.value.state.doc.toString()
-        const isEmpty = !currentCode.trim() || currentCode === defaultCode[Object.keys(defaultCode).find(key => defaultCode[key] === currentCode)]
+        const isEmpty = !currentCode.trim()
         
         if (isEmpty) {
-          // 如果是空的或者是默认代码，则加载新语言的默认代码
+          // 如果是空的，则加载新语言的默认代码
           editor.value.dispatch({
             changes: {
               from: 0,
               to: editor.value.state.doc.length,
-              insert: defaultCode[currentLanguage.value]
+              insert: getDefaultCode(currentLanguage.value)
             }
           })
         }
@@ -495,13 +479,6 @@ body {
                 key: 'Ctrl-Enter',
                 run: () => {
                   runCode()
-                  return true
-                }
-              },
-              {
-                key: 'Shift-Alt-f',
-                run: () => {
-                  formatCode()
                   return true
                 }
               }
@@ -614,7 +591,6 @@ body {
 
     // Python 执行 (模拟)
     const runPython = async (code) => {
-      // 这里是模拟的 Python 执行，实际项目中需要后端支持
       return new Promise((resolve) => {
         setTimeout(() => {
           if (code.includes('print(')) {
@@ -622,7 +598,6 @@ body {
             if (matches) {
               const outputs = matches.map(match => {
                 const content = match.match(/print\(([^)]+)\)/)[1]
-                // 简单的字符串处理
                 return content.replace(/['"`]/g, '')
               })
               resolve(outputs.join('\n'))
@@ -640,7 +615,6 @@ body {
     const runHTML = async (code) => {
       return new Promise((resolve) => {
         try {
-          // 创建一个新窗口来显示 HTML
           const newWindow = window.open('', '_blank')
           if (newWindow) {
             newWindow.document.write(code)
@@ -659,9 +633,7 @@ body {
     const runCSS = async (code) => {
       return new Promise((resolve) => {
         try {
-          // 创建一个包含 CSS 的 HTML 页面
-          const htmlContent = `
-<!DOCTYPE html>
+          const htmlContent = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -711,7 +683,6 @@ ${code}
       try {
         switch (currentLanguage.value) {
           case 'javascript':
-            // 简单的 JavaScript 格式化
             formattedCode = formatJavaScript(code)
             break
           case 'html':
@@ -721,7 +692,6 @@ ${code}
             formattedCode = formatCSS(code)
             break
           default:
-            // 对于 Python 等其他语言，只做基本的缩进整理
             formattedCode = code.split('\n').map(line => line.trim()).join('\n')
         }
         
@@ -737,26 +707,13 @@ ${code}
       }
     }
 
-    // 简单的 JavaScript 格式化
+    // 简单的格式化函数
     const formatJavaScript = (code) => {
-      let formatted = code
-      // 在 { 后添加换行
-      formatted = formatted.replace(/{/g, '{\n')
-      // 在 } 前添加换行
-      formatted = formatted.replace(/}/g, '\n}')
-      // 在 ; 后添加换行
-      formatted = formatted.replace(/;/g, ';\n')
-      // 清理多余的空行
-      formatted = formatted.replace(/\n\s*\n/g, '\n')
-      return formatted.trim()
+      return code.replace(/{/g, '{\n').replace(/}/g, '\n}').replace(/;/g, ';\n').replace(/\n\s*\n/g, '\n').trim()
     }
 
-    // 简单的 HTML 格式化
     const formatHTML = (code) => {
-      let formatted = code
-      // 在标签后添加换行
-      formatted = formatted.replace(/></g, '>\n<')
-      // 简单的缩进处理
+      let formatted = code.replace(/></g, '>\n<')
       const lines = formatted.split('\n')
       let indent = 0
       return lines.map(line => {
@@ -769,16 +726,8 @@ ${code}
       }).join('\n')
     }
 
-    // 简单的 CSS 格式化
     const formatCSS = (code) => {
-      let formatted = code
-      // 在 { 后添加换行
-      formatted = formatted.replace(/{/g, ' {\n')
-      // 在 } 后添加换行
-      formatted = formatted.replace(/}/g, '\n}\n')
-      // 在 ; 后添加换行
-      formatted = formatted.replace(/;/g, ';\n')
-      // 简单的缩进处理
+      let formatted = code.replace(/{/g, ' {\n').replace(/}/g, '\n}\n').replace(/;/g, ';\n')
       const lines = formatted.split('\n')
       return lines.map(line => {
         const trimmed = line.trim()
@@ -803,7 +752,7 @@ ${code}
           changes: {
             from: 0,
             to: editor.value.state.doc.length,
-            insert: defaultCode[currentLanguage.value]
+            insert: getDefaultCode(currentLanguage.value)
           }
         })
         updateEditorStats()
