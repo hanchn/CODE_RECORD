@@ -157,6 +157,30 @@
   color: #858585;
 }
 
+/* IDE水印样式 */
+.ide-watermark {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 999;
+  overflow: hidden;
+}
+
+.watermark-text {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.08);
+  font-family: Arial, sans-serif;
+  font-size: 48px;
+  font-weight: bold;
+  transform: rotate(-30deg);
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .settings-content {
   max-width: 1200px;
   margin: 0 auto;
