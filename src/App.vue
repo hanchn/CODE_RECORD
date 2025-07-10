@@ -10,22 +10,7 @@
         <div class="file-info">
           <span class="file-name">{{ currentFile }}</span>
         </div>
-      
-      <!-- IDE水印 - 只在截图或录制时显示 -->
-      <div class="ide-watermark" v-if="watermarkEnabled && watermarkText && (isGeneratingImage || isRecording)">
-        <div 
-          v-for="(pos, index) in watermarkPositions" 
-          :key="index"
-          class="watermark-text"
-          :style="{
-            left: pos.x + 'px',
-            top: pos.y + 'px'
-          }"
-        >
-          {{ watermarkText }}
-        </div>
       </div>
-    </div>
       
       <div class="toolbar-center">
         <!-- 语言选择 -->
@@ -132,6 +117,21 @@
         </div>
       </div>
     </header>
+    
+    <!-- IDE水印 -->
+    <div class="ide-watermark" v-if="watermarkEnabled && watermarkText">
+      <div 
+        v-for="(pos, index) in watermarkPositions" 
+        :key="index"
+        class="watermark-text"
+        :style="{
+          left: pos.x + 'px',
+          top: pos.y + 'px'
+        }"
+      >
+        {{ watermarkText }}
+      </div>
+    </div>
     
     <!-- 设置面板 -->
     <div v-if="showSettings" class="settings-panel">
@@ -398,8 +398,10 @@ export default {
       
       for (let row = -1; row < rows; row++) {
         for (let col = -1; col < cols; col++) {
+          // 奇偶行错峰排列，偶数行向右偏移半个间距
+          const offsetX = (row % 2 === 0) ? 0 : spacing / 2
           positions.push({
-            x: col * spacing,
+            x: col * spacing + offsetX,
             y: row * spacing
           })
         }
@@ -1135,6 +1137,18 @@ export default {
         // 隐藏界面元素
         hideUIForRecording()
         
+        // 清空编辑器内容
+        if (editor.value) {
+          editor.value.dispatch({
+            changes: {
+              from: 0,
+              to: editor.value.state.doc.length,
+              insert: ''
+            }
+          })
+          code.value = ''
+        }
+        
         // 开始3秒倒计时
         isCountingDown.value = true
         countdownNumber.value = 3
@@ -1302,9 +1316,10 @@ a
     const autoTypeOutput = async () => {
       if (!editor.value || isAutoTyping.value) return
 
-      const codeContent = editor.value.state.doc.toString()
+      // 在录制时使用保存的初始代码，否则使用当前编辑器内容
+      const codeContent = isRecording.value && initialCode.value ? initialCode.value : editor.value.state.doc.toString()
       if (!codeContent.trim()) {
-        // 如果编辑器为空，直接返回
+        // 如果没有代码内容，直接返回
         return
       }
 
@@ -1342,14 +1357,19 @@ a
           if (!isAutoTyping.value) break
           
           const char = codeContent[i]
-          
-          // 在当前位置插入字符
+           
+          // 在当前位置插入字符并更新光标位置
           editor.value.dispatch({
             changes: {
               from: currentPos,
               to: currentPos,
               insert: char
-            }
+            },
+            selection: {
+              anchor: currentPos + 1,
+              head: currentPos + 1
+            },
+            scrollIntoView: true
           })
           
           currentPos++

@@ -165,13 +165,13 @@
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  z-index: 999;
+  z-index: 9999;
   overflow: hidden;
 }
 
 .watermark-text {
   position: absolute;
-  color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.15);
   font-family: Arial, sans-serif;
   font-size: 48px;
   font-weight: bold;
