@@ -218,7 +218,7 @@
               >
             </div>
           </div>
-          <div class="settings-row" v-if="watermarkEnabled">
+          <div class="settings-row" v-if="watermarkEnabled" style="margin-top: 12px;">
             <div class="setting-item">
               <label for="watermarkOpacity">透明度:</label>
               <select 
@@ -227,12 +227,9 @@
                 @change="updateWatermarkStyle"
                 class="select-compact"
               >
-                <option value="0.05">很淡</option>
                 <option value="0.1">较淡</option>
-                <option value="0.15">适中</option>
-                <option value="0.2">较浓</option>
-                <option value="0.3">很浓</option>
-                <option value="0.5">极浓</option>
+                <option value="0.25">适中</option>
+                <option value="0.4">较浓</option>
               </select>
             </div>
           </div>
@@ -400,7 +397,7 @@ export default {
     // 水印相关配置
     const watermarkEnabled = ref(true)
     const watermarkText = ref('AUVWEB')
-    const watermarkOpacity = ref('0.15')
+    const watermarkOpacity = ref('0.25')
 
     // 计算水印位置
     const watermarkPositions = computed(() => {
@@ -859,6 +856,11 @@ export default {
           line.style.lineHeight = lineHeight.value
         })
       }
+    }
+
+    // 更新水印样式
+    const updateWatermarkStyle = () => {
+      document.documentElement.style.setProperty('--watermark-opacity', watermarkOpacity.value)
     }
 
     // 生成代码图片
@@ -1458,6 +1460,9 @@ a
       // 添加键盘事件监听器
       document.addEventListener('keydown', handleEscapeKey)
       
+      // 初始化水印样式
+      updateWatermarkStyle()
+      
       // 延迟初始化编辑器，确保DOM完全渲染
       nextTick(() => {
         setTimeout(() => {
@@ -1495,6 +1500,7 @@ a
       countdownNumber,
       watermarkEnabled,
       watermarkText,
+      watermarkOpacity,
       watermarkPositions,
       changeLanguage,
       runCode,
@@ -1503,6 +1509,7 @@ a
       resetCode,
       autoTypeOutput,
       updateEditorStyle,
+      updateWatermarkStyle,
       generateCodeImage,
       closeImageModal,
       downloadImage,
