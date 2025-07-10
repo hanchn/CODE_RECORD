@@ -279,7 +279,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { EditorView, keymap, highlightActiveLine, highlightActiveLineGutter, lineNumbers } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
@@ -1198,15 +1198,56 @@ export default {
       }
     }
 
+    // ESC键取消录制功能
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && isRecording.value) {
+        event.preventDefault()
+        const confirmCancel = confirm(
+          '是否要取消当前录制？\n\n' +
+          '取消录制将丢失已录制的内容，无法恢复。\n\n' +
+          '点击"确定"取消录制，点击"取消"继续录制。'
+        )
+        
+        if (confirmCancel) {
+          // 停止自动输出
+          isAutoTyping.value = false
+          
+          // 恢复到录制开始前的代码状态
+          if (initialCode.value && editor.value) {
+            code.value = initialCode.value
+            editor.value.dispatch({
+              changes: {
+                from: 0,
+                to: editor.value.state.doc.length,
+                insert: initialCode.value
+              }
+            })
+          }
+          
+          // 停止录制
+          stopRecording()
+        }
+      }
+    }
+
     // 组件挂载
     onMounted(() => {
       console.log('组件已挂载')
+      
+      // 添加键盘事件监听器
+      document.addEventListener('keydown', handleEscapeKey)
+      
       // 延迟初始化编辑器，确保DOM完全渲染
       nextTick(() => {
         setTimeout(() => {
           initEditor()
         }, 100)
       })
+    })
+    
+    // 组件卸载时清理事件监听器
+    onUnmounted(() => {
+      document.removeEventListener('keydown', handleEscapeKey)
     })
 
     return {
