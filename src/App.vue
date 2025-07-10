@@ -876,9 +876,6 @@ export default {
       
       isGeneratingImage.value = true
       
-      // 给一点时间让Slogan显示出来
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
       try {
         // 获取编辑器内容
         const codeContent = editor.value.state.doc.toString()
