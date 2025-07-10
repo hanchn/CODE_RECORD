@@ -785,11 +785,12 @@ export default {
         
         // 设置画布样式（高分辨率）
         const lineHeight = 32 * dpr
-        const padding = 30 * dpr
+        const padding = 20 * dpr  // 减少上下边距
         const lineNumberWidth = 80 * dpr
         const fontSize = 16 * dpr
         const baseWidth = 1200
-        const baseHeight = Math.max(600, lines.length * (lineHeight / dpr) + (padding * 2 / dpr))
+        // 根据实际代码行数计算高度，去除固定最小高度
+        const baseHeight = lines.length * (lineHeight / dpr) + (padding * 2 / dpr)
         
         // 设置canvas实际尺寸（高分辨率）
         canvas.width = baseWidth * dpr
@@ -816,7 +817,7 @@ export default {
         
         // 绘制行号和代码
         lines.forEach((line, index) => {
-          const y = (padding / dpr) + (index + 1) * (lineHeight / dpr)
+          const y = (padding / dpr) + (lineHeight / dpr / 2) + index * (lineHeight / dpr)
           
           // 绘制行号背景
           ctx.fillStyle = '#2d2d2d'
