@@ -13,12 +13,14 @@
       </div>
       
       <div class="toolbar-center">
-        <div class="language-selector">
+        <!-- 语言选择 -->
+        <div class="control-group">
           <label for="language">语言:</label>
           <select 
             id="language" 
             v-model="currentLanguage" 
             @change="changeLanguage"
+            class="select-primary"
           >
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
@@ -29,12 +31,22 @@
             <option value="css">CSS</option>
           </select>
         </div>
+        
+        <!-- 设置面板切换 -->
+        <button 
+          class="btn btn-ghost settings-toggle"
+          @click="showSettings = !showSettings"
+          :class="{ active: showSettings }"
+        >
+          ⚙️ 设置
+        </button>
       </div>
       
       <div class="toolbar-right">
-        <div class="action-buttons">
+        <!-- 主要操作按钮 -->
+        <div class="primary-actions">
           <button 
-            class="btn btn-success" 
+            class="btn btn-success btn-large" 
             @click="runCode" 
             :disabled="isRunning"
           >
@@ -42,30 +54,118 @@
             <span v-else>▶️</span>
             {{ isRunning ? '运行中...' : '运行' }}
           </button>
-          
+        </div>
+        
+        <!-- 次要操作按钮 -->
+        <div class="secondary-actions">
           <button 
-            class="btn btn-warning" 
-            @click="formatCode"
+            class="btn btn-info btn-compact"
+            @click="autoTypeOutput"
+            :disabled="isAutoTyping"
+            title="自动化输出"
           >
-            🎨 格式化
+            <span v-if="isAutoTyping">⌨️</span>
+            <span v-else>🤖</span>
           </button>
           
           <button 
-            class="btn btn-secondary" 
-            @click="clearOutput"
+            class="btn btn-secondary btn-compact"
+            @click="generateCodeImage"
+            :disabled="isGeneratingImage"
+            title="生成图片"
           >
-            🗑️ 清空
+            <span v-if="isGeneratingImage">📷</span>
+            <span v-else>📸</span>
           </button>
           
-          <button 
-            class="btn btn-primary" 
-            @click="resetCode"
-          >
-            🔄 重置
-          </button>
+          <div class="btn-group">
+            <button 
+              class="btn btn-warning btn-compact" 
+              @click="formatCode"
+              title="格式化代码"
+            >
+              🎨
+            </button>
+            
+            <button 
+              class="btn btn-secondary btn-compact" 
+              @click="clearOutput"
+              title="清空输出"
+            >
+              🗑️
+            </button>
+            
+            <button 
+              class="btn btn-primary btn-compact" 
+              @click="resetCode"
+              title="重置代码"
+            >
+              🔄
+            </button>
+          </div>
         </div>
       </div>
     </header>
+    
+    <!-- 设置面板 -->
+    <div v-if="showSettings" class="settings-panel">
+      <div class="settings-content">
+        <div class="settings-group">
+          <h4>🎨 编辑器设置</h4>
+          <div class="settings-row">
+            <div class="setting-item">
+              <label for="fontSize">字体大小:</label>
+              <select 
+                id="fontSize" 
+                v-model="fontSize"
+                @change="updateEditorStyle"
+                class="select-compact"
+              >
+                <option value="12">12px</option>
+                <option value="14">14px</option>
+                <option value="16">16px</option>
+                <option value="18">18px</option>
+                <option value="20">20px</option>
+              </select>
+            </div>
+            
+            <div class="setting-item">
+              <label for="lineHeight">行高:</label>
+              <select 
+                id="lineHeight" 
+                v-model="lineHeight"
+                @change="updateEditorStyle"
+                class="select-compact"
+              >
+                <option value="1.4">1.4</option>
+                <option value="1.6">1.6</option>
+                <option value="1.8">1.8</option>
+                <option value="2.0">2.0</option>
+                <option value="2.2">2.2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="settings-group">
+          <h4>⚡ 自动化设置</h4>
+          <div class="settings-row">
+            <div class="setting-item">
+              <label for="speed">输出速度:</label>
+              <select 
+                id="speed" 
+                v-model="autoTypeSpeed"
+                class="select-compact"
+              >
+                <option value="normal">正常</option>
+                <option value="fast">快速</option>
+                <option value="very-fast">非常快</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <!-- 主要内容区域 -->
     <main class="main-content">
@@ -128,6 +228,23 @@
         </div>
       </div>
     </main>
+    
+    <!-- 图片预览弹窗 -->
+    <div v-if="showImageModal" class="modal-overlay" @click="closeImageModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>代码截图预览</h3>
+          <button class="close-btn" @click="closeImageModal">×</button>
+        </div>
+        <div class="modal-body">
+          <img v-if="generatedImageUrl" :src="generatedImageUrl" alt="代码截图" class="code-image" />
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" @click="downloadImage">📥 下载图片</button>
+          <button class="btn btn-secondary" @click="closeImageModal">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -158,8 +275,16 @@ export default {
     const currentLanguage = ref('javascript')
     const output = ref('')
     const isRunning = ref(false)
+    const isAutoTyping = ref(false)
+    const autoTypeSpeed = ref('normal')
+    const fontSize = ref('16')
+    const lineHeight = ref('1.8')
     const lastRunSuccess = ref(true)
     const hasRun = ref(false)
+    const isGeneratingImage = ref(false)
+    const showImageModal = ref(false)
+    const generatedImageUrl = ref('')
+    const showSettings = ref(false)
 
     // 语言映射
     const languageMap = {
@@ -244,6 +369,11 @@ export default {
         })
         
         console.log('编辑器创建成功:', editor.value)
+
+        // 应用初始样式
+        setTimeout(() => {
+          updateEditorStyle()
+        }, 100)
 
         nextTick(() => {
           if (editor.value) {
@@ -558,6 +688,199 @@ export default {
       }
     }
 
+    // 更新编辑器样式
+    const updateEditorStyle = () => {
+      if (editor.value) {
+        const editorElement = editor.value.dom
+        const scroller = editorElement.querySelector('.cm-scroller')
+        if (scroller) {
+          scroller.style.fontSize = fontSize.value + 'px'
+          scroller.style.lineHeight = lineHeight.value
+        }
+        
+        // 更新所有行的样式
+        const lines = editorElement.querySelectorAll('.cm-line')
+        lines.forEach(line => {
+          line.style.lineHeight = lineHeight.value
+        })
+      }
+    }
+
+    // 生成代码图片
+    const generateCodeImage = async () => {
+      if (isGeneratingImage.value) return
+      
+      isGeneratingImage.value = true
+      
+      try {
+        // 获取编辑器内容
+        const codeContent = editor.value.state.doc.toString()
+        const lines = codeContent.split('\n')
+        
+        // 创建高分辨率canvas
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        
+        // 获取设备像素比，提高清晰度
+        const dpr = window.devicePixelRatio || 2
+        
+        // 设置画布样式（高分辨率）
+        const lineHeight = 32 * dpr
+        const padding = 30 * dpr
+        const lineNumberWidth = 80 * dpr
+        const fontSize = 16 * dpr
+        const baseWidth = 1200
+        const baseHeight = Math.max(600, lines.length * (lineHeight / dpr) + (padding * 2 / dpr))
+        
+        // 设置canvas实际尺寸（高分辨率）
+        canvas.width = baseWidth * dpr
+        canvas.height = baseHeight * dpr
+        
+        // 设置canvas显示尺寸
+        canvas.style.width = baseWidth + 'px'
+        canvas.style.height = baseHeight + 'px'
+        
+        // 缩放绘图上下文以匹配设备像素比
+        ctx.scale(dpr, dpr)
+        
+        // 启用抗锯齿
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        
+        // 设置背景
+        ctx.fillStyle = '#1e1e1e'
+        ctx.fillRect(0, 0, baseWidth, baseHeight)
+        
+        // 设置字体（使用更大的字体以提高清晰度）
+        ctx.font = `${fontSize / dpr}px 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Consolas', monospace`
+        ctx.textBaseline = 'middle'
+        
+        // 绘制行号和代码
+        lines.forEach((line, index) => {
+          const y = (padding / dpr) + (index + 1) * (lineHeight / dpr)
+          
+          // 绘制行号背景
+          ctx.fillStyle = '#2d2d2d'
+          ctx.fillRect(0, y - (lineHeight / dpr / 2), lineNumberWidth / dpr, lineHeight / dpr)
+          
+          // 绘制行号
+          ctx.fillStyle = '#858585'
+          ctx.textAlign = 'right'
+          ctx.fillText((index + 1).toString(), (lineNumberWidth / dpr) - 15, y)
+          
+          // 绘制分隔线
+          ctx.fillStyle = '#444444'
+          ctx.fillRect(lineNumberWidth / dpr, y - (lineHeight / dpr / 2), 1, lineHeight / dpr)
+          
+          // 绘制代码
+          ctx.fillStyle = '#d4d4d4'
+          ctx.textAlign = 'left'
+          ctx.fillText(line, (lineNumberWidth / dpr) + 15, y)
+        })
+        
+        // 转换为高质量图片URL
+        generatedImageUrl.value = canvas.toDataURL('image/png', 1.0)
+        showImageModal.value = true
+        
+      } catch (error) {
+        console.error('生成图片失败:', error)
+        alert('生成图片失败，请重试')
+      } finally {
+        isGeneratingImage.value = false
+      }
+    }
+
+    // 关闭图片预览弹窗
+    const closeImageModal = () => {
+      showImageModal.value = false
+      generatedImageUrl.value = ''
+    }
+
+    // 下载图片
+    const downloadImage = () => {
+      if (!generatedImageUrl.value) return
+      
+      const link = document.createElement('a')
+      link.download = `code-screenshot-${new Date().getTime()}.png`
+      link.href = generatedImageUrl.value
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+
+    const autoTypeOutput = async () => {
+      if (!editor.value || isAutoTyping.value) return
+
+      const code = editor.value.state.doc.toString()
+      if (!code.trim()) {
+        // 如果编辑器为空，直接返回
+        return
+      }
+
+      isAutoTyping.value = true
+      
+      try {
+        // 根据速度设置获取延迟配置
+        const getSpeedConfig = () => {
+          switch (autoTypeSpeed.value) {
+            case 'normal':
+              return { charDelay: [80, 120], lineDelay: [300, 600] }
+            case 'fast':
+              return { charDelay: [30, 60], lineDelay: [100, 200] }
+            case 'very-fast':
+              return { charDelay: [5, 15], lineDelay: [20, 50] }
+            default:
+              return { charDelay: [80, 120], lineDelay: [300, 600] }
+          }
+        }
+        
+        const speedConfig = getSpeedConfig()
+        
+        // 清空编辑器
+        editor.value.dispatch({
+          changes: {
+            from: 0,
+            to: editor.value.state.doc.length,
+            insert: ''
+          }
+        })
+
+        // 逐字符输入代码
+        let currentPos = 0
+        for (let i = 0; i < code.length; i++) {
+          if (!isAutoTyping.value) break
+          
+          const char = code[i]
+          
+          // 在当前位置插入字符
+          editor.value.dispatch({
+            changes: {
+              from: currentPos,
+              to: currentPos,
+              insert: char
+            }
+          })
+          
+          currentPos++
+          
+          // 字符间延迟
+          const charDelay = Math.random() * (speedConfig.charDelay[1] - speedConfig.charDelay[0]) + speedConfig.charDelay[0]
+          await new Promise(resolve => setTimeout(resolve, charDelay))
+          
+          // 如果是换行符，额外停顿
+          if (char === '\n') {
+            const lineDelay = Math.random() * (speedConfig.lineDelay[1] - speedConfig.lineDelay[0]) + speedConfig.lineDelay[0]
+            await new Promise(resolve => setTimeout(resolve, lineDelay))
+          }
+        }
+        
+      } catch (error) {
+        console.error('自动化输出错误:', error)
+      } finally {
+        isAutoTyping.value = false
+      }
+    }
+
     // 组件挂载
     onMounted(() => {
       console.log('组件已挂载')
@@ -577,11 +900,24 @@ export default {
       isRunning,
       lastRunSuccess,
       hasRun,
+      isAutoTyping,
+      autoTypeSpeed,
+      fontSize,
+      lineHeight,
+      isGeneratingImage,
+      showImageModal,
+      generatedImageUrl,
+      showSettings,
       changeLanguage,
       runCode,
       formatCode,
       clearOutput,
-      resetCode
+      resetCode,
+      autoTypeOutput,
+      updateEditorStyle,
+      generateCodeImage,
+      closeImageModal,
+      downloadImage
     }
   }
 }
@@ -657,6 +993,84 @@ export default {
   font-weight: 500;
 }
 
+.speed-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.speed-selector label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.speed-selector select {
+  padding: 6px 12px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.speed-selector select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.font-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.font-selector label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.font-selector select {
+  padding: 6px 12px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.font-selector select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.lineheight-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.lineheight-selector label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.lineheight-selector select {
+  padding: 6px 12px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.lineheight-selector select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
 .toolbar-right {
   display: flex;
   align-items: center;
@@ -730,6 +1144,100 @@ export default {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
+/* 按钮样式 */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #007acc;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #005a9e;
+}
+
+.btn-success {
+  background: #28a745;
+  color: #fff;
+}
+
+.btn-success:hover {
+  background: #218838;
+}
+
+.btn-success:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.btn-warning {
+  background: #ffc107;
+  color: #000;
+}
+
+.btn-warning:hover {
+  background: #e0a800;
+}
+
+.btn-info {
+  background: #17a2b8;
+  color: #fff;
+}
+
+.btn-info:hover {
+  background: #138496;
+}
+
+.btn-info:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+}
+
+.btn-secondary:disabled {
+  background: #495057;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+select {
+  padding: 6px 12px;
+  background: #3c3c3c;
+  color: #ffffff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
 /* CodeMirror 编辑器样式 */
 .code-editor :deep(.cm-editor) {
   height: 100%;
@@ -742,6 +1250,12 @@ export default {
 
 .code-editor :deep(.cm-scroller) {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  line-height: 1.8;
+}
+
+.code-editor :deep(.cm-line) {
+  line-height: 1.8;
+  padding: 2px 0;
 }
 
 .code-editor :deep(.cm-gutters) {
@@ -853,6 +1367,85 @@ export default {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* 弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #2d2d2d;
+  border-radius: 8px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #444;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background: #444;
+}
+
+.modal-body {
+  padding: 20px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.code-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #444;
 }
 
 @media (max-width: 1024px) {
