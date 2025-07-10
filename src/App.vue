@@ -321,6 +321,7 @@ export default {
     const mediaRecorder = ref(null)
     const recordedChunks = ref([])
     const initialCode = ref('')
+    const code = ref('')
 
     // 语言映射
     const languageMap = {
@@ -401,8 +402,16 @@ export default {
 
         editor.value = new EditorView({
           state,
-          parent: editorRef.value
+          parent: editorRef.value,
+          updateListener: EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              code.value = update.state.doc.toString()
+            }
+          })
         })
+        
+        // 初始化code变量
+        code.value = defaultCodes[currentLanguage.value] || ''
         
         console.log('编辑器创建成功:', editor.value)
 
@@ -425,13 +434,17 @@ export default {
     // 切换语言
     const changeLanguage = () => {
       if (editor.value) {
+        const newCode = defaultCodes[currentLanguage.value]
         editor.value.dispatch({
           changes: {
             from: 0,
             to: editor.value.state.doc.length,
-            insert: defaultCodes[currentLanguage.value]
+            insert: newCode
           }
         })
+        
+        // 同步更新code变量
+        code.value = newCode
         
         editor.value.dispatch({
           effects: EditorState.reconfigure.of([
@@ -863,6 +876,22 @@ export default {
           return
         }
 
+        // 检查浏览器是否支持屏幕录制
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          alert('您的浏览器不支持屏幕录制功能，请使用Chrome、Firefox或Edge浏览器')
+          return
+        }
+
+        // 保存初始代码状态
+        initialCode.value = code.value
+        
+        // 提示用户即将开始录制
+        const userConfirm = confirm('即将开始录制代码演示。\n\n请在接下来的屏幕共享对话框中：\n1. 选择"整个屏幕"或"浏览器窗口"\n2. 点击"共享"按钮\n\n录制将自动开始代码输出演示。\n\n是否继续？')
+        
+        if (!userConfirm) {
+          return
+        }
+
         // 请求屏幕录制权限
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
@@ -876,9 +905,17 @@ export default {
 
         // 创建MediaRecorder
         recordedChunks.value = []
-        mediaRecorder.value = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=vp9'
-        })
+        
+        // 检查浏览器支持的编码格式
+        let mimeType = 'video/webm;codecs=vp9'
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'video/webm;codecs=vp8'
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm'
+          }
+        }
+        
+        mediaRecorder.value = new MediaRecorder(stream, { mimeType })
 
         // 监听数据可用事件
         mediaRecorder.value.ondataavailable = (event) => {
@@ -889,7 +926,7 @@ export default {
 
         // 监听录制停止事件
         mediaRecorder.value.onstop = () => {
-          const blob = new Blob(recordedChunks.value, { type: 'video/webm' })
+          const blob = new Blob(recordedChunks.value, { type: mimeType })
           recordedVideoUrl.value = URL.createObjectURL(blob)
           
           // 录制完成后恢复界面显示
@@ -912,9 +949,6 @@ export default {
             stopRecording()
           }
         }
-
-        // 保存初始代码状态
-        initialCode.value = code.value
         
         // 开始录制前隐藏界面元素
         hideUIForRecording()
@@ -923,19 +957,29 @@ export default {
         mediaRecorder.value.start(1000) // 每秒收集一次数据
         isRecording.value = true
 
-        // 提示用户选择编辑器区域
-        alert('请在屏幕共享中选择整个浏览器窗口，然后点击"共享"。录制将自动开始代码输出演示。')
-
         // 延迟一下让用户完成屏幕选择，然后开始自动化输出
         setTimeout(() => {
           if (isRecording.value) {
             autoTypeOutput()
           }
-        }, 2000)
+        }, 3000) // 增加延迟时间，给用户更多时间准备
 
       } catch (error) {
         console.error('录制失败:', error)
-        alert('录制失败：' + error.message)
+        
+        // 提供更友好的错误信息
+        let errorMessage = '录制失败：'
+        if (error.name === 'NotAllowedError') {
+          errorMessage += '用户拒绝了屏幕录制权限，请重新尝试并允许屏幕共享'
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage += '您的浏览器不支持屏幕录制功能'
+        } else if (error.name === 'AbortError') {
+          errorMessage += '录制被用户取消'
+        } else {
+          errorMessage += error.message
+        }
+        
+        alert(errorMessage)
         isRecording.value = false
         // 发生错误时也要恢复界面
         restoreUIAfterRecording()
@@ -1037,8 +1081,8 @@ export default {
     const autoTypeOutput = async () => {
       if (!editor.value || isAutoTyping.value) return
 
-      const code = editor.value.state.doc.toString()
-      if (!code.trim()) {
+      const codeContent = editor.value.state.doc.toString()
+      if (!codeContent.trim()) {
         // 如果编辑器为空，直接返回
         return
       }
@@ -1073,10 +1117,10 @@ export default {
 
         // 逐字符输入代码
         let currentPos = 0
-        for (let i = 0; i < code.length; i++) {
+        for (let i = 0; i < codeContent.length; i++) {
           if (!isAutoTyping.value) break
           
-          const char = code[i]
+          const char = codeContent[i]
           
           // 在当前位置插入字符
           editor.value.dispatch({
@@ -1122,6 +1166,7 @@ export default {
       editorRef,
       currentLanguage,
       currentFile,
+      code,
       output,
       isRunning,
       lastRunSuccess,
